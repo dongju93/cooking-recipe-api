@@ -1,0 +1,166 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Python virtual environments and caches
+.venv
+venv
+env
+ENV
+.Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.pyrefly_cache
+.dmypy.json
+dmypy.json
+
+# Python build artifacts
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Django-specific
+*.log
+db.sqlite3
+db.sqlite3-journal
+/media
+/staticfiles
+/static
+*.pot
+
+# Testing and coverage
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+*.cover
+*.py,cover
+nosetests.xml
+coverage.xml
+*.coveragerc
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+.vim/
+.netrwhist
+
+# macOS-specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.secret
+secrets.*
+.envrc
+
+# Docker files (keep only necessary ones in context)
+docker-compose.override.yml
+.dockerignore
+Dockerfile.dev
+
+# Documentation and markdown (adjust if needed for your project)
+*.md
+!README.md
+docs/
+documentation/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+azure-pipelines.yml
+Jenkinsfile
+
+# Temporary files and logs
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+logs/
+
+# Node.js (if you have frontend assets)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Monitoring and profiling
+*.prof
+*.lprof
+
+# Database dumps and backups
+*.sql
+*.dump
+*.backup
+
+# Lock files (uv.lock is needed, so don't ignore it)
+# uv.lock should be included for reproducible builds
+
+# Miscellaneous
+*.class
+*.pyc
+.cache/
+celerybeat-schedule
+celerybeat.pid
