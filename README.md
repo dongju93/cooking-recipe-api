@@ -31,11 +31,11 @@ docker compose run --rm app sh -c "python manage.py test"
 # collect static
 uv run manage.py collectstatic
 # ruff format
-uv run ruff format .
+uv run ruff format src/
 # ruff lint check
-uv run ruff check .
+uv run ruff check src/
 # pyrefly type check
-uv run pyrefly check
+uv run pyrefly check src/
 # test
 uv run manage.py test
 ```
