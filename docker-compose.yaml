@@ -17,6 +17,7 @@ services:
       # Preserve .venv from Docker image (prevent host from overwriting it)
       - type: volume
         target: /cooking_recipe_api/.venv
+    working_dir: /cooking_recipe_api/src
     command:
       - sh
       - -c

@@ -51,6 +51,9 @@ COPY --from=builder --chown=django-user:django-user /cooking_recipe_api/.venv /c
 # Copy application code
 COPY --chown=django-user:django-user . .
 
+# Change to src directory where manage.py and Django app are located
+WORKDIR /cooking_recipe_api/src
+
 # Set environment variables
 # PATH: Add venv binaries to PATH so Python/Django commands work directly
 # PYTHONUNBUFFERED: Ensure Python output is sent straight to terminal without buffering
