@@ -8,3 +8,22 @@ dependencies = ["django>=6.0.2", "djangorestframework>=3.16.1"]
 
 [dependency-groups]
 dev = ["pyrefly>=0.51.0", "ruff>=0.15.0"]
+
+
+[tool.ruff]
+target-version = "py314"
+exclude = ["migrations", "manage.py", "settings.py"]
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle err
+    "E",
+    # Pyflakes
+    "F",
+    # pycodestyle warn
+    "W",
+    # isort
+    "I",
+    # Django rules
+    "DJ",
+]

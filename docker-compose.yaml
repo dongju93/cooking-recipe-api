@@ -2,15 +2,21 @@ services:
   app:
     build:
       context: .
+      args:
+        - DEV=true
     ports:
       - target: 8000
         published: 8080
         protocol: tcp
         mode: host
     volumes:
+      # Mount entire project root for live code reloading
       - type: bind
-        source: ./app
-        target: /app
+        source: .
+        target: /cooking_recipe_api
+      # Preserve .venv from Docker image (prevent host from overwriting it)
+      - type: volume
+        target: /cooking_recipe_api/.venv
     command:
       - sh
       - -c

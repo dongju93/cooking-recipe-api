@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Build stage with uv
-FROM python:3.14-alpine AS builder
+FROM python:3.14-slim AS builder
 
 # Install uv (Rust-based Python package manager)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Set working directory
-WORKDIR /app
+WORKDIR /cooking_recipe_api
 
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
@@ -15,29 +15,38 @@ COPY pyproject.toml uv.lock ./
 # Create virtual environment and install dependencies
 # UV_COMPILE_BYTECODE: Compile Python files to bytecode for faster startup
 # UV_LINK_MODE: Use copy mode for better compatibility in containers
+
+
+# DEV args, default to false
+ARG DEV=false
+
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project
+    if [ "$DEV" = "true" ]; then \
+    uv sync --frozen --dev --no-install-project; \
+    else \
+    uv sync --frozen --no-install-project; \
+    fi
 
 # Stage 2: Runtime stage
-FROM python:3.14-alpine
+FROM python:3.14-slim
 
 # Install runtime dependencies
-RUN apk add --no-cache \
-    libpq \
-    && rm -rf /var/cache/apk/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
-RUN addgroup -S django-user && \
-    adduser -S -G django-user -h /home/django-user django-user
+RUN groupadd -r django-user && \
+    useradd -r -g django-user -d /home/django-user -m django-user
 
 # Set working directory
-WORKDIR /app
+WORKDIR /cooking_recipe_api
 
 # Copy uv binary from builder
 COPY --from=builder /bin/uv /bin/uvx /bin/
 
 # Copy virtual environment from builder
-COPY --from=builder --chown=django-user:django-user /app/.venv /app/.venv
+COPY --from=builder --chown=django-user:django-user /cooking_recipe_api/.venv /cooking_recipe_api/.venv
 
 # Copy application code
 COPY --chown=django-user:django-user . .
@@ -47,10 +56,10 @@ COPY --chown=django-user:django-user . .
 # PYTHONUNBUFFERED: Ensure Python output is sent straight to terminal without buffering
 # PYTHONDONTWRITEBYTECODE: Prevent Python from writing .pyc files
 # UV_PROJECT_ENVIRONMENT: Point uv to use the venv we created
-ENV PATH="/app/.venv/bin:$PATH" \
+ENV PATH="/cooking_recipe_api/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    UV_PROJECT_ENVIRONMENT="/app/.venv"
+    UV_PROJECT_ENVIRONMENT="/cooking_recipe_api/.venv"
 
 # Expose port 8000 for Django
 EXPOSE 8000
