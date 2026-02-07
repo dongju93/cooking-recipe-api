@@ -38,5 +38,32 @@ uv run ruff check .
 uv run pyrefly check
 # test
 uv run manage.py test
+```
 
+## GitHub Actions
+
+### How it works?
+
+```mermaid
+flowchart LR
+    subgraph Trigger
+        A(GitHub target branch Push)
+    end
+    A --> B
+    subgraph Job
+        B(Pytest)
+        C(Deploy)
+    end
+    B --pass--> C
+    B --fail--> E
+    C --pass--> D
+    C --fail--> E
+    subgraph Result
+        D(Succeeded)
+        E(Failed)
+    end
+    D --> G
+    subgraph G['optional' Notification]
+        F(Preferred Platform)
+    end
 ```
