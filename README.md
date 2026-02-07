@@ -24,3 +24,19 @@ docker compose run --rm app sh -c "pyrefly check"
 # test
 docker compose run --rm app sh -c "python manage.py test"
 ```
+
+### Local
+
+```bash
+# collect static
+uv run manage.py collectstatic
+# ruff format
+uv run ruff format .
+# ruff lint check
+uv run ruff check .
+# pyrefly type check
+uv run pyrefly check
+# test
+uv run manage.py test
+
+```
