@@ -6,6 +6,9 @@ import sys
 
 def main():
     """Run administrative tasks."""
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    # Keep argv[0] absolute so Django autoreload can re-run this script after cwd changes.
+    sys.argv[0] = os.path.abspath(__file__)
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'app.settings')
     try:
         from django.core.management import execute_from_command_line
