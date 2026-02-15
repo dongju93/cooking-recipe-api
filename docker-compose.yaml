@@ -10,11 +10,9 @@ services:
         protocol: tcp
         mode: host
     volumes:
-      # Mount entire project root for live code reloading
       - type: bind
         source: .
         target: /cooking_recipe_api
-      # Preserve .venv from Docker image (prevent host from overwriting it)
       - type: volume
         target: /cooking_recipe_api/.venv
     working_dir: /cooking_recipe_api/src
@@ -24,8 +22,6 @@ services:
       - python manage.py wait_for_db && python manage.py migrate && python manage.py runserver 0.0.0.0:8000
     networks:
       - recipe_net
-    env_file:
-      - ./deploy/postgresql/.env.local
     environment:
       - DB_HOST=recipe_postgres
     depends_on:
@@ -38,8 +34,6 @@ services:
       - postgres_data:/var/lib/postgresql
     networks:
       - recipe_net
-    env_file:
-      - ./deploy/postgresql/.env.local
     ports:
       - 5434:5432
 
