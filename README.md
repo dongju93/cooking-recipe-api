@@ -29,17 +29,13 @@ docker compose run --rm app sh -c "python manage.py test"
 
 ```bash
 # run server
-uv run src/manage.py wait_for_db && uv run src/manage.py migrate && uv run src/manage.py runserver 0.0.0.0:8080
+./dev_server.sh
 # collect static
-uv run manage.py collectstatic
-# ruff format
-uv run ruff format src/
-# ruff lint check
-uv run ruff check src/
-# pyrefly type check
-uv run pyrefly check src/
+uv run src/manage.py collectstatic
+# ruff format, lint, type check
+./code_quality.sh
 # test
-uv run manage.py test
+uv run src/manage.py test
 ```
 
 ## GitHub Actions
