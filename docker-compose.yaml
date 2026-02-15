@@ -1,5 +1,5 @@
 services:
-  app:
+  recipe_api:
     build:
       context: .
       args:
@@ -22,3 +22,31 @@ services:
       - sh
       - -c
       - python manage.py runserver 0.0.0.0:8000
+    networks:
+      - recipe_net
+    env_file:
+      - ./deploy/postgresql/.env.local
+    environment:
+      - DB_HOST=recipe_postgres
+    depends_on:
+      - recipe_postgres
+
+  recipe_postgres:
+    image: postgres:18.2
+    container_name: recipe_postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - recipe_net
+    env_file:
+      - ./deploy/postgresql/.env.local
+    ports:
+      - 5434:5432
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  recipe_net:
+    driver: bridge

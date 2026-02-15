@@ -1,0 +1,20 @@
+services:
+  recipe_postgres:
+    image: postgres:18.2
+    container_name: recipe_postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - recipe_net
+    env_file:
+      - .env.local
+    ports:
+      - 5436:5432
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  recipe_net:
+    driver: bridge
