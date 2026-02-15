@@ -11,7 +11,13 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pyrefly>=0.52.0", "python-dotenv>=1.2.1", "ruff>=0.15.1"]
+dev = [
+    "django-stubs>=5.2.9",
+    "djangorestframework-stubs>=3.16.8",
+    "pyrefly>=0.52.0",
+    "python-dotenv>=1.2.1",
+    "ruff>=0.15.1",
+]
 
 
 [tool.ruff]
