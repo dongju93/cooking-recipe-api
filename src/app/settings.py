@@ -83,8 +83,8 @@ DATABASES = {
         'NAME': environ['POSTGRES_DB'],
         'USER': environ['POSTGRES_USER'],
         'PASSWORD': environ['POSTGRES_PASSWORD'],
-        'HOST': 'localhost',
-        'PORT': '5436',
+        'HOST': environ['POSTGRES_HOST'],
+        'PORT': environ['POSTGRES_PORT'],
     }
 }
 

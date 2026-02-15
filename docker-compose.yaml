@@ -23,7 +23,11 @@ services:
     networks:
       - recipe_net
     environment:
-      - DB_HOST=recipe_postgres
+      - POSTGRES_HOST=recipe_postgres
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PORT=5432
     depends_on:
       - recipe_postgres
 
@@ -36,6 +40,10 @@ services:
       - recipe_net
     ports:
       - 5434:5432
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
 volumes:
   postgres_data:
