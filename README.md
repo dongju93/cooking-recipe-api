@@ -28,6 +28,8 @@ docker compose run --rm app sh -c "python manage.py test"
 ### Local
 
 ```bash
+# run server
+uv run src/manage.py wait_for_db && uv run src/manage.py migrate && uv run src/manage.py runserver 0.0.0.0:8080
 # collect static
 uv run manage.py collectstatic
 # ruff format
