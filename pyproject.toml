@@ -5,18 +5,18 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "django>=6.0.2",
-    "djangorestframework>=3.16.1",
-    "psycopg[binary,pool]>=3.3.2",
+    "django==6.0.2",
+    "djangorestframework==3.16.1",
+    "psycopg[binary,pool]==3.3.2",
 ]
 
 [dependency-groups]
 dev = [
-    "django-stubs>=5.2.9",
-    "djangorestframework-stubs>=3.16.8",
-    "pyrefly>=0.52.0",
-    "python-dotenv>=1.2.1",
-    "ruff>=0.15.1",
+    "django-stubs==5.2.9",
+    "djangorestframework-stubs==3.16.8",
+    "pyrefly==0.52.0",
+    "python-dotenv==1.2.1",
+    "ruff==0.15.1",
 ]
 
 
@@ -26,14 +26,18 @@ exclude = ["migrations", "manage.py", "settings.py"]
 
 [tool.ruff.lint]
 select = [
-    # pycodestyle err
+    # pycodestyle error
     "E",
     # Pyflakes
     "F",
-    # pycodestyle warn
+    # pycodestyle warning
     "W",
     # isort
     "I",
     # Django rules
     "DJ",
+]
+ignore = [
+    # Ignore line length for comments
+    "E501",
 ]
