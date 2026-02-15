@@ -300,3 +300,4 @@ pyrightconfig.json
 
 temp/
 .serena/
+.env*
