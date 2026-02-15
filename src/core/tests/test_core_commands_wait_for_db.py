@@ -55,7 +55,7 @@ class CommandTests(SimpleTestCase):
         """
         mock_connect.return_value = True
         call_command("wait_for_db")
-        mock_connect.assert_called_once_with(database=["default"])
+        mock_connect.assert_called_once_with(databases=["default"])
 
     @patch("time.sleep")
     def test_wait_for_db_delayed(self, mock_sleep, mock_connect):
@@ -84,4 +84,6 @@ class CommandTests(SimpleTestCase):
         mock_connect.side_effect = [PsycopgError] * 2 + [OperationalError] * 3 + [True]
         call_command("wait_for_db")
         self.assertEqual(mock_connect.call_count, 6)
-        mock_connect.assert_called_with(database=["default"])
+        mock_connect.assert_called_with(databases=["default"])
+        # Verify sleep was called 5 times (once for each failed attempt)
+        self.assertEqual(mock_sleep.call_count, 5)
