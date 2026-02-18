@@ -13,6 +13,10 @@
 ### Docker
 
 ```bash
+# create migration files from model changes
+docker compose run --rm recipe_api sh -c "python manage.py makemigrations"
+# apply migrations to database
+docker compose run --rm recipe_api sh -c "python manage.py migrate"
 # collect static
 docker compose run --rm recipe_api sh -c "python manage.py collectstatic"
 # ruff format
@@ -28,6 +32,10 @@ docker compose run --rm recipe_api sh -c "python manage.py test"
 ### Local
 
 ```bash
+# create migration files from model changes
+uv run src/manage.py makemigrations
+# apply migrations to database
+uv run src/manage.py migrate
 # run server
 ./dev_server.sh
 # collect static
@@ -37,6 +45,12 @@ uv run src/manage.py collectstatic
 # test
 uv run src/manage.py test
 ```
+
+## Django Migrations
+
+- **makemigrations**: Detects model changes and creates new migration files in each app's `migrations/` directory.
+- **migrate**: Applies unapplied migration files to the database so the schema matches the current Django models.
+- Recommended order: run `makemigrations` first, then run `migrate`.
 
 ## GitHub Actions
 
