@@ -301,3 +301,4 @@ pyrightconfig.json
 temp/
 .serena/
 .env*
+CLAUDE.md
