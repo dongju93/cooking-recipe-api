@@ -159,17 +159,21 @@ class User(AbstractBaseUser, PermissionsMixin):
     This is fundamentally different from Pydantic where fields are declared
     via `__annotations__` and processed by __class_getitem__ / ModelMetaclass.
 
-    ClassVar annotation clarification
-    ──────────────────────────────────
-    `email: ClassVar[EmailField]` is a static-analysis hint telling type
-    checkers (pyrefly, mypy) "this name at the class level is a ClassVar of
-    type EmailField". Without it, type checkers would infer the class
-    attribute as EmailField but then get confused when you access
-    `user_instance.email` and it returns `str` (the descriptor's __get__
-    return type). ClassVar tells them: the descriptor lives on the class;
-    don't treat it as an instance attribute of that type.
+    Field annotation style
+    ──────────────────────
+    Fields are annotated as plain instances: `email: EmailField = EmailField(...)`.
+    This is the correct style — NOT `ClassVar[EmailField]` — for two reasons:
 
-    At runtime Django ignores ClassVar completely.
+    1. `ClassVar` tells type checkers "this name only exists on the class,
+       not on instances", which is wrong: `user.email` is a valid instance
+       access that returns `str`, not a descriptor.
+
+    2. django-stubs (the official type stubs) ships overloaded `__get__` /
+       `__set__` on each `Field` subclass so the type checker already knows:
+         - `User.email`      → `EmailField`   (class-level, the descriptor)
+         - `user.email`      → `str`          (instance-level, via __get__)
+       Using a plain `EmailField` annotation lets django-stubs apply these
+       overloads automatically. `ClassVar` would suppress that inference.
     """
 
     # ──────────────────────────────────────────────────────────────────────
@@ -178,20 +182,20 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Equivalent to a SQLAlchemy Column(...) inside a mapped class.
     # ──────────────────────────────────────────────────────────────────────
 
-    email: ClassVar[EmailField] = EmailField(
+    email: EmailField = EmailField(
         max_length=255,
         unique=True,
         # unique=True → Django adds a UNIQUE INDEX in the migration.
         # EmailField → subclass of CharField that runs EmailValidator before save.
     )
 
-    name: ClassVar[CharField] = CharField(
+    name: CharField = CharField(
         max_length=255,
         # No blank=True / null=True → this field is required at the DB level
         # and Django's form/serializer validation will reject empty strings.
     )
 
-    is_active: ClassVar[BooleanField] = BooleanField(  # type: ignore[bad-override]
+    is_active: BooleanField = BooleanField(  # type: ignore[bad-override]
         default=True,
         # Django convention: deactivated users (is_active=False) cannot log in.
         # authenticate() in django.contrib.auth checks this flag.
@@ -200,7 +204,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         # our override changes the default, which type checkers flag.
     )
 
-    is_staff: ClassVar[BooleanField] = BooleanField(
+    is_staff: BooleanField = BooleanField(
         default=False,
         # Django admin checks `user.is_staff` to grant access to /admin/.
         # PermissionsMixin checks `user.is_superuser` for full permissions.
