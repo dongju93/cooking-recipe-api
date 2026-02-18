@@ -14,15 +14,15 @@
 
 ```bash
 # collect static
-docker compose run --rm app sh -c "python manage.py collectstatic"
+docker compose run --rm recipe_api sh -c "python manage.py collectstatic"
 # ruff format
-docker compose run --rm app sh -c "ruff format ."
+docker compose run --rm recipe_api sh -c "ruff format ."
 # ruff lint check
-docker compose run --rm app sh -c "ruff check ."
+docker compose run --rm recipe_api sh -c "ruff check ."
 # pyrefly type check
-docker compose run --rm app sh -c "pyrefly check"
+docker compose run --rm recipe_api sh -c "pyrefly check"
 # test
-docker compose run --rm app sh -c "python manage.py test"
+docker compose run --rm recipe_api sh -c "python manage.py test"
 ```
 
 ### Local
