@@ -108,6 +108,8 @@ class UserManagement(BaseUserManager["User"]):
         "default", but it matters in multi-tenant or read-replica setups
         where you may have "default" (write) and "replica" (read) aliases.
         """
+        if not email:
+            raise ValueError("Users must have an email address")
         user: User = self.model(email=self.normalize_email(email), **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
