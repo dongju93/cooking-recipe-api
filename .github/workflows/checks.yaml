@@ -5,6 +5,9 @@ name: Checks
 # trigger workflow on push to any branch
 on: [push]
 
+permissions:
+  contents: read
+
 jobs:
   test-lint:
     # user friendly name
