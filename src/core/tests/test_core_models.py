@@ -14,3 +14,22 @@ class ModelTests(TestCase):
 
         self.assertEqual(user.email, email)
         self.assertTrue(user.check_password(password))
+
+    def test_new_user_email_normalized(self) -> None:
+        mock_emails: list[list[str]] = [
+            ["test1@EXAMPLE.com", "test1@example.com"],
+            ["Test2@Example.com", "Test2@example.com"],
+            ["TEST3@EXAMPLE.com", "TEST3@example.com"],
+            ["test4@example.COM", "test4@example.com"],
+            ["User@GMAIL.COM", "User@gmail.com"],
+            ["ADMIN@COMPANY.ORG", "ADMIN@company.org"],
+            ["Info@Test.Co.Uk", "Info@test.co.uk"],
+            ["support+tag@DOMAIN.IO", "support+tag@domain.io"],
+            ["John.Doe@EXAMPLE.NET", "John.Doe@example.net"],
+            ["TEST_USER@MAIL.COM", "TEST_USER@mail.com"],
+        ]
+        for email, expected in mock_emails:
+            user: User = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+                email=email, password="mock123"
+            )
+            self.assertEqual(user.email, expected)
