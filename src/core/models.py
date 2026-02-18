@@ -108,7 +108,7 @@ class UserManagement(BaseUserManager["User"]):
         "default", but it matters in multi-tenant or read-replica setups
         where you may have "default" (write) and "replica" (read) aliases.
         """
-        user: User = self.model(email=email, **extra_fields)
+        user: User = self.model(email=self.normalize_email(email), **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
 
@@ -210,8 +210,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Manager
     # ──────────────────────────────────────────────────────────────────────
 
-    objects = UserManagement()
+    objects: ClassVar[UserManagement] = UserManagement()
     # `objects` is the conventional name for the default Manager.
+    # ClassVar[UserManagement] tells the type checker the *concrete* manager
+    # type, so User.objects.create_user(...) resolves correctly instead of
+    # falling back to the base Manager which has no create_user method.
     # This is what powers User.objects.create_user(...),
     # User.objects.filter(email=...), etc.
     #
