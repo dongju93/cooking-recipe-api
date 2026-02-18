@@ -116,6 +116,46 @@ class UserManagement(BaseUserManager["User"]):
 
         return user
 
+    def create_superuser(self, email: str, password: str) -> User:
+        """
+        Create, persist, and return a superuser (is_staff=True, is_superuser=True).
+
+        Parameters
+        ----------
+        email : str
+            The superuser's email address. Normalized before storage.
+        password : str
+            Plain-text password. Hashed via create_user → set_password().
+
+        Why delegate to create_user?
+        ─────────────────────────────
+        create_user already handles email validation, normalization, and
+        password hashing. Calling it here re-uses that logic rather than
+        duplicating it — superusers go through the same creation pipeline
+        as regular users, with privilege flags set afterwards.
+
+        Why a second save()?
+        ─────────────────────
+        create_user already persisted the record to the DB. After we mutate
+        is_staff and is_superuser in memory we must call save() again to
+        flush those changes. Django's Active Record ORM does not track
+        "dirty" fields between saves the way SQLAlchemy's Unit of Work does —
+        each save() is an explicit UPDATE of the current in-memory state.
+
+        `createsuperuser` management command
+        ──────────────────────────────────────
+        Django's built-in `createsuperuser` management command calls this
+        method internally (after prompting for email/password interactively).
+        REQUIRED_FIELDS on the User model controls which extra fields it
+        prompts for; since ours is empty, only email and password are asked.
+        """
+        user: User = self.create_user(email=email, password=password)
+        user.is_staff = True
+        user.is_superuser = True
+        user.save(using=self._db)
+
+        return user
+
 
 class User(AbstractBaseUser, PermissionsMixin):
     """
