@@ -1,9 +1,4 @@
-"""
-Test suite for the wait_for_db management command.
-
-This module tests the database connection waiting logic to ensure
-the application waits for the database to be ready before starting.
-"""
+"""Tests for the wait_for_db management command."""
 
 # unittest.mock.patch: Decorator for temporarily replacing objects with mocks during tests.
 # Used here to mock the database check method, preventing actual database connections.
@@ -31,27 +26,28 @@ from psycopg import OperationalError as PsycopgError
 @patch("core.management.commands.wait_for_db.Command.check")
 class CommandTests(SimpleTestCase):
     """
-    Test cases for the wait_for_db management command.
+    Tests for wait_for_db, which polls until the database is ready.
 
-    The @patch decorator at the class level applies to all test methods,
-    automatically injecting 'mock_connect' as the last parameter to each test.
-    This mocks the Command.check() method which Django uses to verify database
-    connectivity, allowing us to simulate various database connection scenarios.
+    SimpleTestCase is used instead of TestCase because these tests don't touch
+    the real database — Command.check() is mocked out entirely, so no DB setup
+    or teardown is needed. This makes the tests faster.
+
+    The class-level @patch replaces Command.check() for every test method in this
+    class. @patch injects the mock object as an extra argument; when applied at the
+    class level it is always the last parameter (mock_connect here). This means each
+    test exercises the command without triggering a real database connection.
+
+    call_command("wait_for_db") invokes the management command programmatically,
+    the same way Django's CLI would run `python manage.py wait_for_db`.
     """
 
     def test_wait_for_db_ready(self, mock_connect):
         """
-        Test that wait_for_db returns immediately when database is ready.
+        Database ready on first attempt — check() is called exactly once.
 
-        Scenario: Database is available on the first connection attempt.
-
-        How it works:
-        - mock_connect.return_value = True: Simulates successful database check
-        - call_command("wait_for_db"): Executes the management command
-        - assert_called_once_with(): Verifies the check was called exactly once
-          with database=["default"], confirming no retries occurred
-
-        This tests the happy path where the database is already available.
+        mock_connect.return_value = True makes the mocked check() succeed immediately.
+        assert_called_once_with(databases=["default"]) verifies that the command
+        checked exactly the "default" database alias and did not retry.
         """
         mock_connect.return_value = True
         call_command("wait_for_db")
@@ -60,26 +56,21 @@ class CommandTests(SimpleTestCase):
     @patch("time.sleep")
     def test_wait_for_db_delayed(self, mock_sleep, mock_connect):
         """
-        Test that wait_for_db retries when database is not immediately available.
+        Command retries when check() raises errors before eventually succeeding.
 
-        Scenario: Database connection fails multiple times before succeeding.
+        side_effect accepts a list: each call to the mock raises or returns the next
+        item in sequence. Two error types are used because database startup has two
+        distinct failure stages:
+          - PsycopgError: raised by the psycopg3 driver before Django's DB abstraction
+            layer processes the connection (driver-level failure).
+          - OperationalError: raised by Django when the connection is accepted but the
+            database is not yet ready to serve queries (Django-level failure).
+        The 6th call returns True, simulating a successful connection.
 
-        How it works:
-        - @patch("time.sleep"): Mocks sleep() to prevent actual waiting,
-          making tests run instantly instead of waiting for real retry delays
-        - mock_connect.side_effect: Defines a sequence of return values:
-          * [PsycopgError] * 2: First 2 calls raise driver-level errors
-            (psycopg3 not ready)
-          * [OperationalError] * 3: Next 3 calls raise Django-level errors
-            (database accepting connections but not fully ready)
-          * [True]: 6th call succeeds, database is ready
-        - call_count == 6: Verifies the command retried correctly
-        - mock_sleep is injected first, mock_connect second due to
-          decorator order (applied bottom-to-top, injected right-to-left)
-
-        This tests resilience to database startup delays, common in
-        containerized environments where the database container may start
-        before it's ready to accept connections.
+        @patch("time.sleep") prevents the command from actually sleeping between
+        retries, keeping the test instant. Decorators are applied bottom-to-top, so
+        the inner @patch (time.sleep) is injected first as mock_sleep, and the
+        outer class-level @patch (Command.check) is injected second as mock_connect.
         """
         mock_connect.side_effect = [PsycopgError] * 2 + [OperationalError] * 3 + [True]
         call_command("wait_for_db")

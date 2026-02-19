@@ -1,22 +1,4 @@
-"""
-core/models.py — Custom User Model for email-based authentication.
-
-Django vs FastAPI mental model
-──────────────────────────────
-In FastAPI you typically separate concerns across three layers:
-  - Pydantic BaseModel  → request/response validation & serialization
-  - SQLAlchemy Model    → database schema & ORM queries
-  - Repository/Service  → business logic / data access
-
-In Django these collapse into ONE class: the Django Model.
-  - It *defines* the DB schema (like an SQLAlchemy Table)
-  - It *validates* data at the field level (like Pydantic, but lighter)
-  - It *IS* the query interface via its Manager (.objects.filter(...))
-
-Django's ORM is "Active Record" style (each instance knows how to save
-itself) while SQLAlchemy is "Data Mapper" style (a separate Session
-coordinates persistence).
-"""
+"""Custom User model using email as the login identifier instead of username."""
 
 from typing import Any, ClassVar
 
@@ -32,81 +14,40 @@ class UserManagement(BaseUserManager["User"]):
     """
     Custom Manager for the User model.
 
-    What is a Manager?
-    ──────────────────
-    In Django, every model has at least one Manager — accessible via the
-    class-level `objects` attribute (e.g. User.objects.all()).
+    In Django, every model has at least one Manager accessible as the class-level
+    `objects` attribute (e.g. User.objects.all()). The Manager is the query
+    interface — it returns QuerySets and provides factory methods like create_user().
 
-    Think of it as a query factory / repository bound to a specific model.
-    It is roughly equivalent to a SQLAlchemy session scoped to one table,
-    or a FastAPI dependency that wraps your DB session + model together.
+    We extend BaseUserManager instead of plain Manager because it adds two helpers:
+      - normalize_email(email): lowercases the domain portion of the address
+        (e.g. "User@EXAMPLE.COM" → "User@example.com") to prevent duplicate
+        accounts caused by case variations.
+      - Exposes set_password() / make_password() for safe password hashing.
 
-    Why subclass BaseUserManager?
-    ──────────────────────────────
-    BaseUserManager provides two important helpers that plain Manager
-    does not ship with:
-      - make_password(raw_password)  — hashes a plain-text password
-      - normalize_email(email)       — lowercases the domain part
-
-    We inherit from it so our create_user() has access to set_password()
-    (which calls make_password internally) without re-implementing hashing.
-
-    Generic parameter BaseUserManager["User"]
-    ─────────────────────────────────────────
-    This is a PEP 484 forward reference. "User" (as a string) avoids a
-    NameError because the User class is defined *after* this class in the
-    file. At runtime Django ignores this annotation; mypy/pyrefly use it
-    for type inference on self.model and queryset return types.
+    The generic string "User" in BaseUserManager["User"] is a PEP 484 forward
+    reference to avoid a NameError — the User class is defined after this one in
+    the file. Django ignores it at runtime; type checkers use it to infer the
+    correct return type for self.model and queryset methods.
     """
 
     def create_user(
         self, email: str, password: str | None = None, **extra_fields: Any
     ) -> "User":
         """
-        Create, persist, and return a regular (non-superuser) User.
+        Create and return a regular (non-superuser) User.
 
-        Parameters
-        ----------
-        email : str
-            The user's email address. Used as the USERNAME_FIELD.
-        password : str | None
-            Plain-text password. Will be hashed before storage.
-            Pass None to create a user with an unusable password
-            (e.g. OAuth / SSO users who never set a local password).
-        **extra_fields : Any
-            Any additional model fields (e.g. name="Alice").
+        self.model is set automatically by Django to the model class that declared
+        `objects = UserManagement()`, so self.model(...) instantiates an unsaved User.
 
-        How self.model works
-        ────────────────────
-        BaseUserManager sets self.model automatically to the model class
-        that declared `objects = UserManagement()`. So `self.model(...)` is
-        equivalent to calling `User(...)` — it instantiates an unsaved
-        in-memory User object, just like Pydantic's MyModel(...).
+        set_password(password) hashes the plain-text value with PBKDF2-SHA256 and a
+        random salt — the raw password is never stored. Pass password=None to create a
+        user with an unusable password (authenticate() will always reject it), which
+        is appropriate for OAuth/SSO accounts that have no local password.
 
-        How set_password works (important for security)
-        ────────────────────────────────────────────────
-        `user.set_password(raw_password)` never stores the plain-text value.
-        Internally it calls Django's `make_password()`:
-          1. Selects a hasher (PBKDF2-SHA256 by default, configurable via
-             PASSWORD_HASHERS in settings.py).
-          2. Generates a cryptographically random salt.
-          3. Produces a string like:
-             "pbkdf2_sha256$720000$<salt>$<hash>"
-          4. Stores that string in user.password.
-
-        `check_password(raw, encoded)` later re-hashes the candidate and
-        does a constant-time comparison — never comparing plain-text.
-
-        How save(using=self._db) works
-        ──────────────────────────────
-        `save()` is the Active Record "persist to DB" call — equivalent to:
-          session.add(user); session.commit()  # SQLAlchemy
-          await user_repo.save(user)           # FastAPI repository pattern
-
-        `using=self._db` routes the INSERT to the correct database alias
-        defined in settings.DATABASES. In single-DB projects this is always
-        "default", but it matters in multi-tenant or read-replica setups
-        where you may have "default" (write) and "replica" (read) aliases.
+        save(using=self._db) writes the record to the database. The `using` argument
+        routes the INSERT to the correct database alias in settings.DATABASES — always
+        "default" in single-DB projects, but necessary in multi-DB setups where you
+        may have separate write and read-replica aliases.
         """
         if not email:
             raise ValueError("Users must have an email address")
@@ -118,36 +59,17 @@ class UserManagement(BaseUserManager["User"]):
 
     def create_superuser(self, email: str, password: str) -> User:
         """
-        Create, persist, and return a superuser (is_staff=True, is_superuser=True).
+        Create and return a superuser with is_staff=True and is_superuser=True.
 
-        Parameters
-        ----------
-        email : str
-            The superuser's email address. Normalized before storage.
-        password : str
-            Plain-text password. Hashed via create_user → set_password().
+        Delegates to create_user() to reuse email validation and password hashing.
+        After that save(), is_staff and is_superuser are set in memory and save()
+        is called a second time — Django's ORM does not track which fields changed
+        between saves, so each save() is an explicit UPDATE of the full current state.
 
-        Why delegate to create_user?
-        ─────────────────────────────
-        create_user already handles email validation, normalization, and
-        password hashing. Calling it here re-uses that logic rather than
-        duplicating it — superusers go through the same creation pipeline
-        as regular users, with privilege flags set afterwards.
+        is_staff=True grants access to Django's /admin/ interface.
+        is_superuser=True bypasses all permission checks in has_perm() entirely.
 
-        Why a second save()?
-        ─────────────────────
-        create_user already persisted the record to the DB. After we mutate
-        is_staff and is_superuser in memory we must call save() again to
-        flush those changes. Django's Active Record ORM does not track
-        "dirty" fields between saves the way SQLAlchemy's Unit of Work does —
-        each save() is an explicit UPDATE of the current in-memory state.
-
-        `createsuperuser` management command
-        ──────────────────────────────────────
-        Django's built-in `createsuperuser` management command calls this
-        method internally (after prompting for email/password interactively).
-        REQUIRED_FIELDS on the User model controls which extra fields it
-        prompts for; since ours is empty, only email and password are asked.
+        Called internally by the `createsuperuser` management command.
         """
         user: User = self.create_user(email=email, password=password)
         user.is_staff = True
@@ -159,61 +81,28 @@ class UserManagement(BaseUserManager["User"]):
 
 class User(AbstractBaseUser, PermissionsMixin):
     """
-    Custom User model using email (not username) as the login identifier.
+    Custom User model with email-based authentication.
 
-    Why not use Django's built-in User?
-    ────────────────────────────────────
-    Django ships `django.contrib.auth.models.User` with a `username` field.
-    Swapping to email-based auth after your first migration is painful
-    (requires data migrations and schema changes). Best practice is to
-    define a custom User model at project start — even if you don't need
-    customisation yet — so you own the schema from day one.
+    AbstractBaseUser provides the minimum auth machinery: password hashing,
+    the last_login field, and set_password() / check_password(). It intentionally
+    omits fields like username — you define USERNAME_FIELD and REQUIRED_FIELDS
+    yourself to control which fields are used for authentication.
 
-    Class hierarchy explained
-    ─────────────────────────
-    AbstractBaseUser  (django.contrib.auth.base_user)
-      └─ Provides: password hashing, last_login field, set_password(),
-                   check_password(), get_session_auth_hash().
-         Does NOT include: username, email, is_staff, groups, permissions.
-         You must declare USERNAME_FIELD and REQUIRED_FIELDS yourself.
+    PermissionsMixin adds the permission framework: the is_superuser flag, groups
+    and user_permissions M2M relations, and has_perm() / has_module_perms() which
+    are used by the admin and DRF's IsAdminUser permission class.
 
-    PermissionsMixin  (django.contrib.auth.models)
-      └─ Provides: is_superuser flag, groups M2M, user_permissions M2M,
-                   has_perm(), has_module_perms().
-         Plugs into Django's permission framework (used by the admin, DRF
-         IsAdminUser, etc.) without coupling us to the default User schema.
+    USERNAME_FIELD = "email" tells django.contrib.auth.authenticate() which field
+    to look up when a login attempt is made. The field must have unique=True.
 
-    Together they give us: auth + permissions, without the username baggage.
+    Defining a custom User model at project start is best practice. Django's auth
+    system hard-wires the User model into many migrations; swapping it after the
+    first migration requires rewriting those migration dependencies manually.
 
-    How Django model fields work (Descriptor Protocol)
-    ───────────────────────────────────────────────────
-    At class definition time, `EmailField(max_length=255, unique=True)` is
-    a Django Field *descriptor* object stored on the class. Django's
-    ModelBase metaclass (the __init_subclass__ machinery) inspects these
-    descriptors to:
-      1. Build the SQL schema for migrations (CREATE TABLE / ALTER TABLE).
-      2. Register validators (max_length, unique constraints).
-      3. Set up __get__/__set__ so that `instance.email` returns the actual
-         value from the instance's __dict__, not the descriptor itself.
-
-    This is fundamentally different from Pydantic where fields are declared
-    via `__annotations__` and processed by __class_getitem__ / ModelMetaclass.
-
-    Field annotation style
-    ──────────────────────
-    Fields are annotated as plain instances: `email: EmailField = EmailField(...)`.
-    This is the correct style — NOT `ClassVar[EmailField]` — for two reasons:
-
-    1. `ClassVar` tells type checkers "this name only exists on the class,
-       not on instances", which is wrong: `user.email` is a valid instance
-       access that returns `str`, not a descriptor.
-
-    2. django-stubs (the official type stubs) ships overloaded `__get__` /
-       `__set__` on each `Field` subclass so the type checker already knows:
-         - `User.email`      → `EmailField`   (class-level, the descriptor)
-         - `user.email`      → `str`          (instance-level, via __get__)
-       Using a plain `EmailField` annotation lets django-stubs apply these
-       overloads automatically. `ClassVar` would suppress that inference.
+    Fields are annotated as `email: EmailField = EmailField(...)` rather than
+    `ClassVar[EmailField]`. django-stubs ships overloaded __get__ / __set__ on each
+    Field subclass so that `user.email` is inferred as str. Using ClassVar would
+    tell the type checker the field only exists on the class, suppressing that.
     """
 
     # ──────────────────────────────────────────────────────────────────────

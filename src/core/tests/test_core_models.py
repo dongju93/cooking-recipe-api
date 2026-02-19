@@ -1,17 +1,4 @@
-"""
-Test suite for the core application models.
-
-This module contains comprehensive tests for the custom User model defined
-in the core application. It validates user creation, email normalization,
-password hashing, and superuser functionality.
-
-Key testing areas:
-- User creation with email and password
-- Email normalization (case-insensitive domain handling)
-- Password validation and hashing
-- Superuser creation with proper permissions
-- Error handling for invalid inputs (e.g., empty email)
-"""
+"""Tests for the custom User model in core."""
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -21,34 +8,26 @@ from ..models import User
 
 class ModelTests(TestCase):
     """
-    Test cases for the custom User model.
+    Tests for the custom User model.
 
-    The custom User model is the primary authentication entity in this application.
-    Unlike Django's default User model (which uses username), this implementation
-    requires email for authentication. This test class verifies all core functionality.
+    Uses TestCase (not SimpleTestCase) because each test needs to write and query
+    User records in the database. TestCase wraps each test in a transaction that
+    rolls back automatically after the test, keeping the database clean between runs.
 
-    Test Strategy:
-    - Use get_user_model() to access the custom User model dynamically
-    - Type ignore comments are added where pyrefly cannot resolve the custom
-      manager's create_user() and create_superuser() methods
-    - All tests use TestCase (not SimpleTestCase) because they require database access
+    get_user_model() returns the model class set in settings.AUTH_USER_MODEL. Using
+    it instead of importing User directly is the recommended pattern — it keeps tests
+    decoupled from a specific model path and works correctly with the Django test
+    runner's app registry.
     """
 
     def test_create_user_with_email_successful(self) -> None:
         """
-        Test successful user creation with email and password.
+        User is created with the correct email and a hashed password.
 
-        Scenario: Creating a new user with valid email and password.
-
-        How it works:
-        - create_user() creates a new User instance and saves it to the database
-        - self.assertEqual(user.email, email): Verifies the email is stored exactly
-          as provided (respecting case at this point; normalization is tested separately)
-        - self.assertTrue(user.check_password(password)): Confirms the password is
-          hashed and stored securely (not stored in plaintext)
-
-        This is the primary happy-path test for user creation,
-        ensuring the core authentication mechanism works correctly.
+        check_password(raw) re-hashes the candidate value using the same algorithm
+        and salt stored in user.password, then does a constant-time comparison.
+        It returns True only if the raw value matches — confirming that set_password()
+        stored a proper hash rather than plain text.
         """
         email: str = "test@example.com"
         password: str = "testpass123"
@@ -61,28 +40,15 @@ class ModelTests(TestCase):
 
     def test_new_user_email_normalized(self) -> None:
         """
-        Test that email domains are normalized to lowercase.
+        Email domain is normalised to lowercase regardless of input casing.
 
-        Scenario: User registration with emails in various case combinations.
+        BaseUserManager.normalize_email() lowercases only the domain portion
+        (after @), leaving the local part unchanged. This prevents the same
+        address from creating duplicate accounts (e.g. "user@EXAMPLE.COM" and
+        "user@example.com" must resolve to the same account).
 
-        How it works:
-        - Email normalization converts the domain portion to lowercase for consistent
-          lookups and to prevent duplicate accounts from case variations
-        - The local part (before @) preserves case, as email addresses are technically
-          case-insensitive in practice but this is the standard approach
-        - mock_emails list contains 10 test cases covering:
-          * All uppercase domains (EXAMPLE.com, GMAIL.COM)
-          * Mixed case domains (Example.com, Test.Co.Uk)
-          * Email addresses with special characters (support+tag@, John.Doe@)
-          * Various TLDs (.com, .org, .net, .io, .co.uk)
-        - For each case, we create the user and verify the domain is normalized
-
-        This test ensures case-insensitive email lookups work correctly and
-        prevents multiple accounts for the same email address.
-
-        Note: Email normalization follows RFC 5321 standards where the domain
-        is case-insensitive but the local part may be case-sensitive depending
-        on the email provider (we normalize both for safety).
+        Ten cases cover all-uppercase, mixed-case, and special-character variants
+        across different TLDs, including multi-part domains like .co.uk.
         """
         mock_emails: list[list[str]] = [
             ["test1@EXAMPLE.com", "test1@example.com"],
@@ -104,19 +70,12 @@ class ModelTests(TestCase):
 
     def test_new_user_without_email_raise_error(self) -> None:
         """
-        Test that creating a user without an email raises a ValueError.
+        Creating a user with an empty email raises ValueError.
 
-        Scenario: Attempting to create a user with an empty email string.
-
-        How it works:
-        - Email is a required field in the custom User model manager
-        - self.assertRaises(ValueError): Verifies that create_user() raises ValueError
-          when an empty email string is provided
-        - This prevents creating users without a valid authentication identifier
-
-        This test ensures data integrity by preventing invalid user records.
-        Since email is the unique identifier for authentication (not username),
-        this validation is critical to the security model.
+        The assertRaises context manager verifies that the body of the `with` block
+        raises the specified exception. Because email is the USERNAME_FIELD, an
+        empty value must be rejected before reaching the database — the UserManagement
+        manager enforces this explicitly at the top of create_user().
         """
         with self.assertRaises(ValueError):
             get_user_model().objects.create_user(  # type: ignore[missing-attribute]
@@ -125,21 +84,11 @@ class ModelTests(TestCase):
 
     def test_create_superuser(self) -> None:
         """
-        Test successful superuser creation with proper permissions.
+        Superuser is created with is_staff and is_superuser both True.
 
-        Scenario: Creating an admin/superuser account for system administration.
-
-        How it works:
-        - create_superuser() creates a User instance with elevated privileges
-        - self.assertTrue(user.is_superuser): Verifies the is_superuser flag is True,
-          which grants access to protected admin operations
-        - self.assertTrue(user.is_staff): Verifies the is_staff flag is True,
-          which allows access to Django's admin interface
-        - Unlike create_user(), create_superuser() automatically sets both flags
-
-        This test ensures the admin account creation mechanism works correctly.
-        Superusers have unrestricted access to all models and the admin interface,
-        so this functionality is critical for system administration.
+        is_staff=True is required to log in to the Django admin (/admin/).
+        is_superuser=True bypasses all individual permission checks in has_perm(),
+        granting unrestricted access to every model and action in the admin.
         """
         user = get_user_model().objects.create_superuser(  # type: ignore[missing-attribute]
             email="superuser@example.com", password="superpass123"
