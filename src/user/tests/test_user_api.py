@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from core.models import User
 
 CREATE_USER_URL: str = reverse("user:create")
+TOKEN_URL: str = reverse("user:token")
 
 
 def create_user(**params) -> User:
@@ -107,3 +108,78 @@ class PublicUserApiTests(TestCase):
             get_user_model().objects.filter(email=payload["email"]).exists()
         )
         self.assertFalse(user_exists)
+
+    def test_create_token_for_user(self) -> None:
+        """
+        Valid credentials return 200 with a token key in the response body.
+
+        The user is created directly via `create_user()` rather than through the
+        API so that test setup is independent of the create-user endpoint. This
+        keeps the token test focused on one responsibility: verifying that correct
+        credentials produce a token, not that user creation also works.
+
+        Asserting that `"token"` is present in `res.data` rather than checking its
+        exact value is sufficient — the token string is opaque to callers; only its
+        presence matters for a successful login.
+        """
+        user_details: dict[str, str] = {
+            "email": "test@example.com",
+            "password": "testpass123",
+            "name": "Test User",
+        }
+        create_user(**user_details)
+
+        payload: dict[str, str] = {
+            "email": user_details["email"],
+            "password": user_details["password"],
+        }
+        res = self.client.post(TOKEN_URL, payload)
+
+        self.assertIn("token", res.data)  # type: ignore[missing-attribute]
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+    def test_create_token_bad_credentials(self) -> None:
+        """
+        Wrong password returns 400 Bad Request with no token in the response.
+
+        `authenticate()` inside AuthTokenSerializer.validate() returns None when
+        the password does not match, causing a ValidationError to be raised. DRF
+        converts this into a 400 response, and no token is generated or returned.
+
+        Asserting `"token" not in res.data` alongside the status code prevents a
+        regression where a future change might return 400 but still accidentally
+        leak a token value in the error payload.
+        """
+        create_user(email="test@example.com", password="testpass123", name="Test User")
+
+        payload: dict[str, str] = {
+            "email": "test@example.com",
+            "password": "wrongpassword",
+        }
+        res = self.client.post(TOKEN_URL, payload)
+
+        self.assertNotIn("token", res.data)  # type: ignore[missing-attribute]
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_token_blank_password(self) -> None:
+        """
+        Blank password string returns 400 Bad Request with no token in the response.
+
+        This tests a distinct failure mode from wrong credentials: an empty string
+        passes CharField's blank check by default, but `authenticate()` will still
+        return None because no stored password hash can match an empty value.
+
+        `trim_whitespace=False` on the password field means the blank value is
+        forwarded to authenticate() unchanged — there is no silent stripping that
+        could mask what the caller actually sent.
+        """
+        create_user(email="test@example.com", password="testpass123", name="Test User")
+
+        payload: dict[str, str] = {
+            "email": "test@example.com",
+            "password": "",
+        }
+        res = self.client.post(TOKEN_URL, payload)
+
+        self.assertNotIn("token", res.data)  # type: ignore[missing-attribute]
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
