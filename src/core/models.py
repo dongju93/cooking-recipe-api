@@ -41,8 +41,11 @@ class UserManagement(BaseUserManager["User"]):
 
         set_password(password) hashes the plain-text value with PBKDF2-SHA256 and a
         random salt — the raw password is never stored. Pass password=None to create a
-        user with an unusable password (authenticate() will always reject it), which
-        is appropriate for OAuth/SSO accounts that have no local password.
+        user with an unusable password. This is appropriate for users who authenticate
+        through external providers (OAuth, SAML, etc.) that manage their own token/
+        credential validation. Note: These users never call authenticate(), so the fact
+        that authenticate() would reject any password attempt is irrelevant to their
+        login flow.
 
         save(using=self._db) writes the record to the database. The `using` argument
         routes the INSERT to the correct database alias in settings.DATABASES — always
