@@ -2,8 +2,11 @@
 
 from typing import Sequence
 
+from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
+from rest_framework.authentication import BaseAuthentication, TokenAuthentication
 from rest_framework.authtoken.views import ObtainAuthToken
-from rest_framework.generics import CreateAPIView
+from rest_framework.generics import CreateAPIView, RetrieveUpdateAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.serializers import BaseSerializer, Serializer
 from rest_framework.settings import api_settings
 
@@ -62,3 +65,48 @@ class CreateTokenView(ObtainAuthToken):
 
     serializer_class: type[Serializer] = AuthTokenSerializer
     renderer_classes: Sequence[str] = api_settings.DEFAULT_RENDERER_CLASSES  # type: ignore[bad-override]
+
+
+class ManageUserView(RetrieveUpdateAPIView):
+    """
+    API view for retrieving and updating the currently authenticated user.
+
+    RetrieveUpdateAPIView is a DRF generic view that provides GET, PUT, and PATCH
+    handlers. Internally it mixes in RetrieveModelMixin (implements `retrieve()`),
+    UpdateModelMixin (implements `update()` / `partial_update()`), and
+    GenericAPIView (wires serializer and response helpers).
+
+    `get_object()` is overridden to return `request.user` directly instead of
+    performing a queryset lookup. There is no URL pk — users always manage
+    themselves. This also prevents IDOR: there is no identifier in the URL that
+    a caller could manipulate to retrieve or modify another user's record.
+
+    `authentication_classes = [TokenAuthentication]` requires `Authorization:
+    Token <key>` in the request header. DRF verifies the token against the
+    authtoken table and attaches the resolved User to `request.user`.
+
+    `permission_classes = [IsAuthenticated]` short-circuits with 401 Unauthorized
+    if the token is missing or invalid — the view logic is never reached for
+    unauthenticated requests.
+    """
+
+    serializer_class: type[BaseSerializer] | None = UserSerializer
+    authentication_classes: Sequence[type[BaseAuthentication]] = [TokenAuthentication]
+    permission_classes = [
+        IsAuthenticated
+    ]  # cannot import private type alias, type hint is 'Sequence[_PermissionClass]'
+
+    def get_object(self) -> AbstractBaseUser | AnonymousUser:
+        """
+        Return the currently authenticated user as the object to retrieve or update.
+
+        DRF's GenericAPIView calls `get_object()` inside `retrieve()` and `update()`
+        to resolve which model instance the current request targets. The default
+        implementation performs a queryset lookup using the URL pk keyword argument.
+
+        Returning `request.user` bypasses the queryset lookup entirely — there is no
+        pk in the URL for this endpoint (the path is simply /api/user/me). The user
+        identified by the token is both the subject and the only accessible object,
+        so no further filtering or permission check is needed beyond `IsAuthenticated`.
+        """
+        return self.request.user

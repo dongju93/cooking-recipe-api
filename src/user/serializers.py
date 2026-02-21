@@ -63,6 +63,36 @@ class UserSerializer(ModelSerializer):
         """
         return get_user_model().objects.create_user(**validated_data)  # type: ignore[missing-attribute]
 
+    def update(self, instance: User, validated_data: dict[str, str]) -> User:
+        """
+        Update and return an existing User, re-hashing the password if provided.
+
+        DRF calls this method from `serializer.save()` when an instance is passed
+        (i.e. for partial or full update, not creation). `validated_data` contains
+        only the fields the caller included — with PATCH this may be a subset of
+        all writable fields.
+
+        `validated_data.pop("password", None)` removes the raw password before
+        forwarding to `super().update()`. If password were left in, the parent
+        implementation would call `setattr(instance, "password", raw_value)`,
+        writing the plain-text string directly to the database — a critical security
+        vulnerability. Popping it first ensures only safe fields are written by the
+        default update path.
+
+        Calling `user.set_password(password)` followed by `user.save()` hashes the
+        value and persists it — the same contract as `create_user()`. The explicit
+        `user.save()` is necessary because `super().update()` has already returned;
+        the instance is not in a pending-save state at this point.
+        """
+        password: str | None = validated_data.pop("password", None)
+        user: User = super().update(instance, validated_data)
+
+        if password:
+            user.set_password(password)
+            user.save()
+
+        return user
+
 
 class AuthTokenSerializer(Serializer):
     """
