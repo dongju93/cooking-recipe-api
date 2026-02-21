@@ -11,6 +11,7 @@ from core.models import User
 
 CREATE_USER_URL: str = reverse("user:create")
 TOKEN_URL: str = reverse("user:token")
+ME_URL: str = reverse("user:me")
 
 
 def create_user(**params) -> User:
@@ -183,3 +184,106 @@ class PublicUserApiTests(TestCase):
 
         self.assertNotIn("token", res.data)  # type: ignore[missing-attribute]
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_retrieve_user_unauthorized(self) -> None:
+        """
+        GET /api/user/me without a token returns 401 Unauthorized.
+
+        No `force_authenticate()` or `Authorization` header is set on the client,
+        so the request arrives without credentials. `TokenAuthentication` returns
+        `None` (unauthenticated), and `IsAuthenticated` on `ManageUserView` responds
+        with 401 before `get_object()` is ever reached — confirming the /me endpoint
+        is protected and cannot be accessed anonymously.
+        """
+        res = self.client.get(ME_URL)
+
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PrivateUserApiTests(TestCase):
+    """
+    Tests for the authenticated (private) user API endpoints.
+
+    Uses TestCase for database access. Each test method gets a fresh,
+    pre-authenticated context via `setUp()`, which creates a real User record
+    and calls `force_authenticate()` on the APIClient.
+
+    `force_authenticate()` bypasses `TokenAuthentication` entirely — it directly
+    sets `request.user` and `request.auth` without an HTTP token lookup. This
+    keeps the tests focused on view and serializer behaviour rather than on
+    the authentication mechanism, which is covered separately by the token tests.
+    """
+
+    def setUp(self) -> None:
+        """
+        Create a user and a pre-authenticated client before each test.
+
+        A fresh user and client are constructed for every test method so that
+        one test cannot corrupt state used by another. `force_authenticate()`
+        accepts a User instance and attaches it directly to subsequent requests,
+        bypassing token validation — appropriate for tests that assume a valid
+        authenticated session exists.
+        """
+        self.user = create_user(
+            email="test@example.com", password="testpass123", name="Test User"
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_retrieve_profile_success(self) -> None:
+        """
+        GET /api/user/me returns 200 with the authenticated user's email and name.
+
+        The response body is compared against `{name, email}` — the two readable
+        fields exposed by `UserSerializer`. `password` must be absent (`write_only=True`),
+        and any internal fields (id, is_active, etc.) must also be excluded (not listed
+        in `Meta.fields`). Comparing `res.data` directly against a dict confirms both
+        field presence and field values in a single assertion.
+        """
+        res = self.client.get(ME_URL)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            res.data,  # type: ignore[missing-attribute]
+            {
+                "name": self.user.name,
+                "email": self.user.email,
+            },
+        )
+
+    def test_post_me_not_allowed(self) -> None:
+        """
+        POST /api/user/me returns 405 Method Not Allowed.
+
+        `RetrieveUpdateAPIView` only mixes in `retrieve()` (GET) and `update()`
+        (PUT/PATCH) — there is no `create()` handler. DRF automatically returns
+        405 for any HTTP method that has no corresponding handler, without the
+        view needing explicit rejection logic.
+        """
+        res = self.client.post(ME_URL, {})
+
+        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_update_user_profile(self) -> None:
+        """
+        PATCH /api/user/me updates name and password for the authenticated user.
+
+        Three assertions together verify the full update contract:
+          1. `self.user.name == payload["name"]` — the name field was persisted;
+             `refresh_from_db()` re-reads the row from the database so the
+             assertion reflects what is actually stored, not just what is in memory.
+          2. `check_password(payload["password"])` returns True — the new password
+             was hashed via `set_password()`, not stored as plain text.
+          3. HTTP 200 OK — the request was accepted and the update was applied.
+
+        PATCH is used instead of PUT because only two fields are provided; PUT
+        would require the full set of writable fields (email, name, password).
+        """
+        payload: dict[str, str] = {"name": "New Name", "password": "newpassword123"}
+
+        res = self.client.patch(ME_URL, payload)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.name, payload["name"])
+        self.assertTrue(self.user.check_password(payload["password"]))
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
