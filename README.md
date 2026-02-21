@@ -46,6 +46,27 @@ uv run src/manage.py collectstatic
 uv run src/manage.py test
 ```
 
+## API Documentation
+
+The API uses [drf-spectacular](https://drf-spectacular.readthedocs.io/) to generate OpenAPI schema and interactive documentation.
+
+### Endpoints
+
+- **OpenAPI Schema**: `http://localhost:8080/api/v1/schema` — Raw OpenAPI 3.0 schema (JSON)
+- **Swagger UI**: `http://localhost:8080/api/v1/docs` — Interactive API documentation with try-it-out functionality
+
+Access these endpoints after starting the server:
+
+```bash
+# Local development
+./dev_server.sh
+# Then visit: http://localhost:8080/api/v1/docs
+
+# With Docker Compose
+docker compose up
+# Then visit: http://localhost:8080/api/v1/docs
+```
+
 ## Django Migrations
 
 - **makemigrations**: Detects model changes and creates new migration files in each app's `migrations/` directory.
