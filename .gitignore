@@ -301,4 +301,5 @@ pyrightconfig.json
 temp/
 .serena/
 .env*
+!.env*.example
 CLAUDE.md
