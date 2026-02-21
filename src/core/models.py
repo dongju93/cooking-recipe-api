@@ -83,6 +83,7 @@ class UserManagement(BaseUserManager["User"]):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+    # // TODO: Define user model using Pydantic BaseModel to validate input data or use dataclass to define the model and use it in serializer for input validation.
     """
     Custom User model with email-based authentication.
 
