@@ -9,10 +9,11 @@ declared here and referenced via `include("user.urls")` in the root urls.py.
 from django.urls import path
 from django.urls.resolvers import URLPattern
 
-from .views import CreateUserView
+from .views import CreateTokenView, CreateUserView
 
 app_name = "user"
 
 urlpatterns: list[URLPattern] = [
     path("create", CreateUserView.as_view(), name="create"),
+    path("token", CreateTokenView.as_view(), name="token"),
 ]
