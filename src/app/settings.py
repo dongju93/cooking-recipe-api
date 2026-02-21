@@ -42,9 +42,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework', # DRF
+    'rest_framework.authtoken', # DRF token authentication
     'drf_spectacular', # DRF Swagger
     # My applications
     'core',
+    'user'
 ]
 
 MIDDLEWARE = [

@@ -101,6 +101,86 @@ flowchart LR
     end
 ```
 
+## Authentication
+
+Django REST Framework supports four authentication strategies. This project uses **Token Authentication**.
+
+### 1. Basic Authentication
+
+```
+Authorization: Basic base64(email:password)
+```
+
+Credentials are sent with every request. The server decodes and validates them against the database each time.
+
+- **Pros**: Simple, stateless, no server-side storage needed
+- **Cons**: Credentials travel on every request (requires HTTPS); no way to log out without changing the password
+- **DRF class**: `BasicAuthentication`
+
+### 2. Token Authentication ← this project uses
+
+```
+# Login — exchange credentials for a token
+POST /api/user/token  { "email": "...", "password": "..." }
+← { "token": "abc123..." }
+
+# Subsequent requests — send token in header
+Authorization: Token abc123...
+```
+
+On login the server generates a random opaque token and stores it in the `authtoken_token` table. The client stores it and sends it in the `Authorization` header on every subsequent request.
+
+- **Pros**: Credentials sent only once; tokens are revokable by deleting the DB row; built into DRF with no extra dependencies
+- **Cons**: Tokens never expire by default; requires a DB lookup on every authenticated request
+- **DRF class**: `TokenAuthentication`
+
+### 3. JWT (JSON Web Token)
+
+```
+# Login — receive short-lived access token + long-lived refresh token
+POST /api/token  { "email": "...", "password": "..." }
+← { "access": "eyJ...", "refresh": "eyJ..." }
+
+# Subsequent requests
+Authorization: Bearer eyJ...
+
+# When access token expires, use refresh token to get a new one
+POST /api/token/refresh  { "refresh": "eyJ..." }
+← { "access": "eyJ..." }
+```
+
+The server signs a JSON payload with a secret key. No DB lookup is needed per request — the server only verifies the signature. The access token is short-lived (minutes); the refresh token is long-lived.
+
+- **Pros**: Stateless — no DB lookup per request, scales horizontally; built-in expiry
+- **Cons**: Cannot revoke tokens before expiry without a blocklist (which reintroduces DB lookups); payload is base64-encoded, not encrypted
+- **DRF library**: `djangorestframework-simplejwt`
+
+### 4. Session Authentication
+
+```
+# Login — server creates a session record and sends a session ID cookie
+POST /api/login  { "username": "...", "password": "..." }
+← Set-Cookie: sessionid=xyz
+
+# Browser sends cookie automatically on subsequent requests
+Cookie: sessionid=xyz
+```
+
+Django's built-in session framework stores session data server-side (DB or cache) and identifies the user via a cookie. Used by Django Admin.
+
+- **Pros**: Easy with Django's built-in system; cookies are sent automatically by browsers
+- **Cons**: Stateful — sessions stored server-side; cookie-based (CSRF protection required); not suitable for mobile apps or third-party API clients
+- **DRF class**: `SessionAuthentication`
+
+### Comparison
+
+| Strategy | Stateless | Revokable | Expiry | Extra dependency |
+| -------- | --------- | --------- | ------ | ---------------- |
+| Basic    | Yes       | No        | No     | None             |
+| Token    | No        | Yes       | No     | None (built-in)  |
+| JWT      | Yes       | Partial   | Yes    | simplejwt        |
+| Session  | No        | Yes       | Yes    | None             |
+
 ## TDD Theory
 
 Test-Driven Development (TDD) is a software development methodology where tests are written before the actual implementation code. TDD follows a cyclical process known as the **Red-Green-Refactor** cycle.
