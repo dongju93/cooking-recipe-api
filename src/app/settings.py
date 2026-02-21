@@ -129,8 +129,14 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # User defined
+
+# User model
 AUTH_USER_MODEL = "core.User"
 
+# DRF Swagger
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
+
+# Remove trailing slash from URL patterns
+APPEND_SLASH = False
