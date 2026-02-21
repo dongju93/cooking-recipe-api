@@ -41,7 +41,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'drf_spectacular',
+    'rest_framework', # DRF
+    'drf_spectacular', # DRF Swagger
+    # My applications
     'core',
 ]
 
@@ -128,3 +130,7 @@ STATIC_URL = 'static/'
 
 # User defined
 AUTH_USER_MODEL = "core.User"
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
