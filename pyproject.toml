@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "django==6.0.2",
     "djangorestframework==3.16.1",
+    "drf-spectacular==0.29.0",
     "psycopg[binary,pool]==3.3.3",
 ]
 
@@ -16,7 +17,7 @@ dev = [
     "djangorestframework-stubs==3.16.8",
     "pyrefly==0.53.0",
     "python-dotenv==1.2.1",
-    "ruff==0.15.1",
+    "ruff==0.15.2",
 ]
 
 
