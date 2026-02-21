@@ -1,9 +1,13 @@
 """Views for the user API."""
 
-from rest_framework.generics import CreateAPIView
-from rest_framework.serializers import BaseSerializer
+from typing import Sequence
 
-from .serializers import UserSerializer
+from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.generics import CreateAPIView
+from rest_framework.serializers import BaseSerializer, Serializer
+from rest_framework.settings import api_settings
+
+from .serializers import AuthTokenSerializer, UserSerializer
 
 
 class CreateUserView(CreateAPIView):
@@ -34,3 +38,27 @@ class CreateUserView(CreateAPIView):
     """
 
     serializer_class: type[BaseSerializer] | None = UserSerializer
+
+
+class CreateTokenView(ObtainAuthToken):
+    """
+    API view to issue a DRF authentication token via HTTP POST.
+
+    Inherits from ObtainAuthToken, which already implements the `post()` handler:
+    it calls `serializer.is_valid()`, then calls `Token.objects.get_or_create(user=…)`
+    and returns `{"token": "<key>"}` in a 200 response. Subclassing lets us swap
+    out just the two class attributes without duplicating any logic.
+
+    `serializer_class` is replaced with AuthTokenSerializer so that our custom
+    `validate()` method runs credential checking (email-based authenticate call
+    + ValidationError on failure) instead of the default username/password check
+    bundled with ObtainAuthToken.
+
+    `renderer_classes` is set to api_settings.DEFAULT_RENDERER_CLASSES so the
+    DRF browsable API renderer is available, matching the rest of the project's
+    renderer configuration. ObtainAuthToken sets a narrower default (JSON only),
+    so this override re-enables the HTML browsable interface for this endpoint.
+    """
+
+    serializer_class: type[Serializer] = AuthTokenSerializer
+    renderer_classes: Sequence[str] = api_settings.DEFAULT_RENDERER_CLASSES  # type: ignore[bad-override]

@@ -1,10 +1,16 @@
 """Serializers for the user API."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
-from rest_framework.serializers import ModelSerializer
+from rest_framework.serializers import (
+    CharField,
+    EmailField,
+    ModelSerializer,
+    Serializer,
+    ValidationError,
+)
 
 from core.models import User
 
@@ -56,3 +62,63 @@ class UserSerializer(ModelSerializer):
         raw password string — a critical security vulnerability.
         """
         return get_user_model().objects.create_user(**validated_data)  # type: ignore[missing-attribute]
+
+
+class AuthTokenSerializer(Serializer):
+    """
+    Serializer for validating email/password login credentials.
+
+    Uses plain Serializer (not ModelSerializer) because this is not a
+    model-backed resource — it never reads from or writes to a database
+    row directly. Its sole job is to validate incoming credentials and
+    attach the authenticated User object to `attrs` for the view to consume.
+
+    `trim_whitespace=False` on the password field is intentional: whitespace
+    is valid inside a password, and stripping it silently would cause valid
+    credentials to be rejected (e.g. a password that begins or ends with a
+    space would be modified before comparison, producing an auth failure).
+    """
+
+    email = EmailField()
+    password = CharField(
+        style={"input_type": "password"},
+        trim_whitespace=False,
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """
+        Authenticate the provided credentials and attach the user to attrs.
+
+        DRF calls `validate()` after all individual field validators pass but
+        before the serializer returns the cleaned data. It receives the full
+        `attrs` dict, making it the correct place for cross-field or
+        side-effectful validation like an authentication check.
+
+        `authenticate()` queries the backend configured in AUTHENTICATION_BACKENDS
+        (Django's default ModelBackend checks the username/password against the
+        database). We pass `username=email` because the custom User model sets
+        USERNAME_FIELD = "email". A return value of None means authentication
+        failed — the user either does not exist or the password is wrong. We treat
+        both cases identically to avoid leaking whether an email is registered.
+
+        Raising ValidationError here causes `is_valid()` to return False, and DRF
+        will return a 400 Bad Request. Attaching `user` to `attrs` passes it to the
+        view (ObtainAuthToken.post), which reads `serializer.validated_data["user"]`
+        to look up or create the auth token.
+        """
+        email: str = attrs["email"]
+        password: str = attrs["password"]
+
+        user: AbstractBaseUser | None = authenticate(
+            request=self.context["request"],
+            username=email,
+            password=password,
+        )
+        if not user:
+            raise ValidationError(
+                "Unable to authenticate with provided credentials.",
+                code="authentication",
+            )
+
+        attrs["user"] = user
+        return attrs
