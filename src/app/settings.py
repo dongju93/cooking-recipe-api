@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 from dotenv import load_dotenv
 from os import environ
+import django_stubs_ext
+
+django_stubs_ext.monkeypatch()
 
 load_dotenv(".env.local")
 
