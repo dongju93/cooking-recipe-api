@@ -1,28 +1,37 @@
 """URL configuration for the recipe API.
 
-DRF's DefaultRouter generates two URL patterns automatically when a ViewSet
-is registered:
-  - ``recipes``        → list   (GET /recipes) and create (POST /recipes)
-  - ``recipes/<pk>``   → detail (GET, PUT, PATCH, DELETE /recipes/<pk>)
+The ViewSet is wired manually (without a DRF router) because the router's
+empty-prefix optimisation strips the ``/`` separator from the detail route,
+producing ``api/v1/recipe<pk>`` instead of ``api/v1/recipe/<pk>``.
 
-``app_name = "recipe"`` declares the application namespace so that URL names can
-be reversed unambiguously as ``"recipe:recipe-list"`` and ``"recipe:recipe-detail"``
-even if another app registers URLs with the same action names. The router derives
-these names from the basename of the registered ViewSet (defaulting to the queryset
-model name in lowercase) combined with the action suffix (``-list``, ``-detail``).
+This URLconf is mounted at ``api/v1/recipe`` (no trailing slash) in app/urls.py.
+Django strips that prefix and passes the remainder to these patterns:
+
+  - ``""``      → list   (GET /api/v1/recipe) and create (POST /api/v1/recipe)
+  - ``"/<pk>"`` → detail (GET, PUT, PATCH, DELETE /api/v1/recipe/<pk>)
+
+``app_name = "recipe"`` declares the application namespace so URL names can be
+reversed as ``"recipe:recipe-list"`` and ``"recipe:recipe-detail"``.
 """
 
-from django.urls import include, path
-from django.urls.resolvers import URLResolver
-from rest_framework.routers import DefaultRouter
+from django.urls import path
+from django.urls.resolvers import URLPattern
 
 from .views import RecipeViewSet
 
-router = DefaultRouter()
-router.register(r"recipes", RecipeViewSet)
-
 app_name = "recipe"
 
-urlpatterns: list[URLResolver] = [
-    path("", include(router.urls)),
+_list = RecipeViewSet.as_view({"get": "list", "post": "create"})
+_detail = RecipeViewSet.as_view(
+    {
+        "get": "retrieve",
+        "put": "update",
+        "patch": "partial_update",
+        "delete": "destroy",
+    }
+)
+
+urlpatterns: list[URLPattern] = [
+    path("", _list, name="recipe-list"),
+    path("/<int:pk>", _detail, name="recipe-detail"),
 ]

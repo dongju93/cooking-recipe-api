@@ -63,7 +63,7 @@ class PublicRecipeApiTests(TestCase):
 
     def test_auth_required(self) -> None:
         """
-        GET /api/v1/recipe/recipes without a token returns 401 Unauthorized.
+        GET /api/v1/recipe without a token returns 401 Unauthorized.
 
         No `force_authenticate()` or `Authorization` header is set on the
         client, so the request arrives without credentials. `TokenAuthentication`
@@ -108,7 +108,7 @@ class PrivateRecipeApiTests(TestCase):
 
     def test_retrieve_recipes(self) -> None:
         """
-        GET /api/v1/recipe/recipes returns 200 with all recipes for the user.
+        GET /api/v1/recipe returns 200 with all recipes for the user.
 
         Two assertions together verify the full list contract:
           1. HTTP 200 OK — the view accepted the authenticated request and
@@ -134,7 +134,7 @@ class PrivateRecipeApiTests(TestCase):
 
     def test_recipe_list_limited_to_user(self) -> None:
         """
-        GET /api/v1/recipe/recipes only returns recipes belonging to the authenticated user.
+        GET /api/v1/recipe only returns recipes belonging to the authenticated user.
 
         Two recipes are created — one for `other_user` and one for `self.user`.
         The response is compared against a serializer seeded with only `self.user`'s
