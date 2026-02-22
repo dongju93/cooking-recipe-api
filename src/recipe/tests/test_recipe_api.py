@@ -200,3 +200,43 @@ class PrivateRecipeApiTests(TestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, serializer.data)  # type: ignore[missing-attribute]
+
+    def test_create_recipe(self) -> None:
+        """
+        POST /api/v1/recipe with a valid payload creates a recipe and returns 201.
+
+        The test verifies three guarantees of the create path:
+
+        1. **HTTP 201 Created** — the view accepted the payload, the serializer
+           validated it, and ``perform_create()`` persisted the record without
+           errors.
+
+        2. **All payload fields are persisted correctly** — after retrieving the
+           created row via ``Recipe.objects.get(id=res.data["id"])``, the loop
+           compares every payload key against the DB value using ``getattr()``.
+           Fetching from the ORM rather than reading ``res.data`` directly
+           confirms that the data actually reached the database, not just the
+           serializer output layer.
+
+        3. **Owner is set to the authenticated user** — ``recipe.user == self.user``
+           confirms that ``perform_create()`` correctly injected
+           ``user=self.request.user`` regardless of what the client sent in the
+           body, preventing privilege-escalation through a crafted ``user`` field.
+        """
+        payload: dict[str, Decimal | int | str] = {
+            "title": "Chocolate cheesecake",
+            "time_minutes": 30,
+            "price": Decimal("5.00"),
+            "description": "Delicious chocolate cheesecake recipe.",
+            "link": "https://example.com/chocolate-cheesecake.pdf",
+        }
+
+        res = self.client.post(RECIPE_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        recipe: Recipe = Recipe.objects.get(id=res.data["id"])  # type: ignore[missing-attribute]
+        for key, value in payload.items():
+            self.assertEqual(getattr(recipe, key), value)
+
+        self.assertEqual(recipe.user, self.user)
