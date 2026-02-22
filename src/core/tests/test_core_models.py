@@ -1,9 +1,11 @@
 """Tests for the custom User model in core."""
 
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from ..models import User
+from ..models import Recipe, User
 
 
 class ModelTests(TestCase):
@@ -95,3 +97,36 @@ class ModelTests(TestCase):
         )
         self.assertTrue(user.is_superuser)
         self.assertTrue(user.is_staff)
+
+    def test_create_recipe(self) -> None:
+        """
+        Recipe is created with all required fields, using Decimal for price accuracy.
+
+        Why Decimal("5.50") instead of float(5.50) or int(550)?
+
+        - Decimal: Exact base-10 arithmetic; 5.50 remains 5.50 (no rounding errors).
+                   Maps to PostgreSQL NUMERIC type — guaranteed precision.
+                   DRF serializes to string in JSON ("5.50"), preserving full precision.
+
+        - float:    Binary representation causes rounding: 5.50 ≈ 5.500000000000001.
+                    Unacceptable for any financial calculation. Never use for prices.
+
+        - int:      Requires manual conversion (550 = $5.50). Error-prone; unclear
+                    whether a value is cents or dollars. Use only in extreme cases.
+
+        This test demonstrates the recommended pattern: always use Decimal
+        for monetary fields, as enforced by the Recipe model.
+        """
+        user = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+            email="user@example.com", password="testpass123"
+        )
+
+        recipe: Recipe = Recipe.objects.create(
+            user=user,
+            title="Sample recipe",
+            time_minutes=5,
+            price=Decimal("5.50"),
+            description="Sample recipe description.",
+        )
+
+        self.assertEqual(str(recipe), recipe.title)

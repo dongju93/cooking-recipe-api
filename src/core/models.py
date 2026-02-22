@@ -2,12 +2,23 @@
 
 from typing import Any, ClassVar
 
+from django.conf import settings
 from django.contrib.auth.base_user import (
     AbstractBaseUser,
     BaseUserManager,
 )
 from django.contrib.auth.models import PermissionsMixin
-from django.db.models import BooleanField, CharField, EmailField
+from django.db.models import (
+    CASCADE,
+    BooleanField,
+    CharField,
+    DecimalField,
+    EmailField,
+    ForeignKey,
+    IntegerField,
+    Model,
+    TextField,
+)
 
 
 class UserManagement(BaseUserManager["User"]):
@@ -176,3 +187,61 @@ class User(AbstractBaseUser, PermissionsMixin):
     # It only matters for the `createsuperuser` management command — it
     # specifies which extra fields to prompt for interactively. Since we
     # have sensible defaults on all other fields, we leave it empty.
+
+
+class Recipe(Model):
+    """
+    Represents a cooking recipe owned by a specific user.
+
+    Extends Django's base Model class directly — no auth machinery is
+    needed here, unlike User which extends AbstractBaseUser. This gives
+    us a plain database-backed model with Django's ORM query interface.
+
+    The ForeignKey to settings.AUTH_USER_MODEL (rather than a direct import
+    of the User class) is the recommended Django pattern for two reasons:
+      1. It avoids circular imports — core.models defines both User and Recipe,
+         but apps outside core that define models referencing the user should
+         not couple themselves to core.models.User directly.
+      2. It honours AUTH_USER_MODEL at runtime, so if the project ever swaps
+         to a different user model the FK resolves to the new model without
+         touching Recipe's code.
+
+    on_delete=CASCADE means that deleting a User will automatically delete
+    all of that user's Recipe rows. This preserves referential integrity at
+    the database level (a foreign key constraint enforces it) and prevents
+    orphaned recipe rows that belong to no user.
+
+    String fields use blank=True (not null=True) for optional values:
+      - Django convention is to store "no value" as an empty string ''
+        rather than NULL for string-based columns (CharField, TextField).
+      - Mixing NULL and '' creates two representations of "nothing", which
+        complicates queries (you'd need both IS NULL and = '').
+      - blank=True tells Django form / serializer validation to accept an
+        empty string; the DB column itself remains NOT NULL with default ''.
+
+    DecimalField is used for price instead of FloatField because floats use
+    IEEE 754 binary representation, which cannot exactly represent most decimal
+    fractions (e.g. 0.1 + 0.2 ≠ 0.3). DecimalField maps to NUMERIC in
+    PostgreSQL, which stores and computes exact decimal values — essential for
+    monetary amounts to avoid rounding errors in totals or comparisons.
+    """
+
+    user: ForeignKey = ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=CASCADE,
+    )
+    title: CharField = CharField(max_length=255)
+    description: TextField = TextField(blank=True)
+    time_minutes: IntegerField = IntegerField()
+    price: DecimalField = DecimalField(max_digits=5, decimal_places=2)
+    link: CharField = CharField(max_length=255, blank=True)
+
+    def __str__(self) -> str:
+        """Return the recipe title as its human-readable string representation.
+
+        Django's admin changelist, shell introspection, and logging all call
+        __str__ when displaying model instances. Returning the title makes
+        Recipe objects immediately identifiable without needing to inspect the
+        primary key or other fields.
+        """
+        return self.title
