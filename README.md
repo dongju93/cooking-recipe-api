@@ -67,6 +67,27 @@ docker compose up
 # Then visit: http://localhost:8080/api/v1/docs
 ```
 
+## DRF APIView vs ViewSet
+
+`APIView` and `ViewSet` are both DRF abstractions for building APIs, but they fit different use cases.
+
+### APIView
+
+- Maps HTTP methods directly (`get`, `post`, `put`, `patch`, `delete`)
+- Best for custom workflows like authentication endpoints (`create`, `token`, `me`) where behavior is not standard CRUD
+- Uses explicit URL wiring via `path(...)`
+
+### ViewSet
+
+- Groups resource actions (`list`, `retrieve`, `create`, `update`, `partial_update`, `destroy`) in one class
+- Best for model-driven resources (for example: `recipes`, `tags`, `ingredients`)
+- Commonly paired with DRF routers to generate RESTful routes automatically
+
+### Rule of Thumb in This Project
+
+- Use `APIView` for auth/session-style endpoints and custom one-off actions.
+- Use `ModelViewSet` (or mixin-based ViewSet) for resource collections that need standard CRUD behavior.
+
 ## Django Migrations
 
 - **makemigrations**: Detects model changes and creates new migration files in each app's `migrations/` directory.
