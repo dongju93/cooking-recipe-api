@@ -4,6 +4,7 @@ from typing import Sequence
 
 from rest_framework.authentication import BaseAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.serializers import BaseSerializer
 from rest_framework.viewsets import ModelViewSet
 
 from core.models import Recipe
@@ -89,3 +90,22 @@ class RecipeViewSet(ModelViewSet):
             return RecipeSerializer
 
         return RecipeDetailSerializer
+
+    def perform_create(self, serializer: BaseSerializer) -> None:
+        """
+        Inject the authenticated user into the recipe before saving.
+
+        DRF calls ``perform_create()`` inside ``CreateModelMixin.create()``
+        after ``serializer.is_valid()`` succeeds but before ``serializer.save()``.
+        It is the designated hook for attaching server-side context that must
+        not be accepted from the client payload — here, the owning user.
+
+        Passing ``user=self.request.user`` as a keyword argument to
+        ``serializer.save()`` is equivalent to setting it as a validated field:
+        DRF merges it with ``serializer.validated_data`` before calling
+        ``Recipe.objects.create()``. Because ``user`` is not listed in
+        ``RecipeDetailSerializer.fields``, clients cannot override it — they
+        cannot assign their recipe to another user by supplying a ``user`` key
+        in the POST body.
+        """
+        serializer.save(user=self.request.user)
