@@ -10,9 +10,25 @@ from rest_framework.test import APIClient
 
 from core.models import Recipe
 
-from ..serializers import RecipeSerializer
+from ..serializers import RecipeDetailSerializer, RecipeSerializer
 
 RECIPE_URL: str = reverse("recipe:recipe-list")
+
+
+def detail_url(recipe_id: int) -> str:
+    """
+    Build the URL for the recipe detail endpoint for a given recipe id.
+
+    The DRF Router registers a detail route whose name follows the pattern
+    ``<basename>-detail`` — here ``recipe-detail`` under the ``recipe``
+    namespace. ``reverse()`` with ``args=[recipe_id]`` fills in the ``{pk}``
+    segment, producing a URL such as ``/api/v1/recipe/1``.
+
+    Encapsulating this in a helper rather than calling ``reverse()`` inline
+    in each test means a route-name change only requires a single edit here,
+    and it keeps individual test methods free of URL-construction boilerplate.
+    """
+    return reverse("recipe:recipe-detail", args=[recipe_id])
 
 
 def create_recipe(user, **params) -> Recipe:
@@ -156,6 +172,31 @@ class PrivateRecipeApiTests(TestCase):
 
         recipes = Recipe.objects.filter(user=self.user)
         serializer = RecipeSerializer(recipes, many=True)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, serializer.data)  # type: ignore[missing-attribute]
+
+    def test_get_recipe_detail(self) -> None:
+        """
+        GET /api/v1/recipe/{id} returns 200 with the full recipe detail payload.
+
+        The detail endpoint is served by the ``retrieve`` action, which causes
+        ``RecipeViewSet.get_serializer_class()`` to return ``RecipeDetailSerializer``
+        instead of ``RecipeSerializer``. This test verifies that switch works: if
+        the view accidentally used the list serializer, ``description`` would be
+        absent from the response and the ``res.data == serializer.data`` assertion
+        would fail.
+
+        ``RecipeDetailSerializer(recipe)`` is instantiated with a single object
+        (no ``many=True``) to produce the expected single-object representation,
+        mirroring how the view serializes the retrieved instance.
+        """
+        recipe: Recipe = create_recipe(user=self.user)
+
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.get(url)
+
+        serializer = RecipeDetailSerializer(recipe)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, serializer.data)  # type: ignore[missing-attribute]
