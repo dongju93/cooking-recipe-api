@@ -40,7 +40,7 @@ class UserAdmin(BaseUserAdmin):
     required for Django's i18n system to work correctly.
     """
 
-    ordering: ClassVar[tuple] = ("id",)
+    ordering: ClassVar[tuple] = ("id",)  # type: ignore[bad-override]
     list_display: ClassVar[tuple] = ("email", "name", "is_active", "is_staff")  # type: ignore[bad-override]
 
     # ╔════════════════════════════════════════════════════════════════════════════╗
@@ -74,7 +74,7 @@ class UserAdmin(BaseUserAdmin):
     #   ┌─ [Important dates] ───────────┐
     #   │ Last login: [read-only]       │
     #   └──────────────────────────────┘
-    fieldsets: ClassVar[tuple] = (
+    fieldsets: ClassVar[tuple] = (  # type: ignore[bad-override]
         # Fieldset 1: Credentials (no heading, always shown)
         (None, {"fields": ("email", "password")}),
         # Fieldset 2: Permissions (titled section for privilege management)
@@ -97,7 +97,7 @@ class UserAdmin(BaseUserAdmin):
 
     # Fields marked as read-only: displayed but not editable in admin forms
     # Prevents accidental modification of audit timestamps
-    readonly_fields: ClassVar[tuple] = ("last_login",)
+    readonly_fields: ClassVar[tuple] = ("last_login",)  # type: ignore[bad-override]
     # ╔════════════════════════════════════════════════════════════════════════════╗
     # ║ ADD_FIELDSETS - Organizing the Create User Form                           ║
     # ╚════════════════════════════════════════════════════════════════════════════╝

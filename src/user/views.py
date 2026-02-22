@@ -7,7 +7,8 @@ from rest_framework.authentication import BaseAuthentication, TokenAuthenticatio
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.generics import CreateAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.serializers import BaseSerializer, Serializer
+from rest_framework.renderers import BaseRenderer
+from rest_framework.serializers import BaseSerializer
 from rest_framework.settings import api_settings
 
 from .serializers import AuthTokenSerializer, UserSerializer
@@ -63,8 +64,10 @@ class CreateTokenView(ObtainAuthToken):
     so this override re-enables the HTML browsable interface for this endpoint.
     """
 
-    serializer_class: type[Serializer] = AuthTokenSerializer
-    renderer_classes: Sequence[str] = api_settings.DEFAULT_RENDERER_CLASSES  # type: ignore[bad-override]
+    serializer_class: type[AuthTokenSerializer] = AuthTokenSerializer  # type: ignore[bad-override]
+    renderer_classes: Sequence[type[BaseRenderer]] = (
+        api_settings.DEFAULT_RENDERER_CLASSES  # type: ignore[bad-assignment]
+    )
 
 
 class ManageUserView(RetrieveUpdateAPIView):

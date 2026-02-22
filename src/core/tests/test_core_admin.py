@@ -53,7 +53,7 @@ class AdminSiteTests(TestCase):
         url: str = reverse("admin:core_user_changelist")
         response = self.client.get(url)
 
-        self.assertContains(response, self.user.name)
+        self.assertContains(response, self.user.name)  # type: ignore[missing-attribute]
         self.assertContains(response, self.user.email)
 
     def test_edit_user_page(self) -> None:
@@ -65,7 +65,7 @@ class AdminSiteTests(TestCase):
         fieldsets contains no missing or misspelled field names — a bad field name
         would raise a FieldError and return a 500 response.
         """
-        url: str = reverse("admin:core_user_change", args=[self.user.id])
+        url: str = reverse("admin:core_user_change", args=[self.user.id])  # type: ignore[missing-attribute]
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
