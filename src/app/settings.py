@@ -46,7 +46,8 @@ INSTALLED_APPS = [
     'drf_spectacular', # DRF Swagger
     # My applications
     'core',
-    'user'
+    'user',
+    'recipe'
 ]
 
 MIDDLEWARE = [
