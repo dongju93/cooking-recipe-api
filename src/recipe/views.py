@@ -4,12 +4,11 @@ from typing import Sequence
 
 from rest_framework.authentication import BaseAuthentication, TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.serializers import BaseSerializer
 from rest_framework.viewsets import ModelViewSet
 
 from core.models import Recipe
 
-from .serializers import RecipeSerializer
+from .serializers import RecipeDetailSerializer, RecipeSerializer
 
 
 class RecipeViewSet(ModelViewSet):
@@ -35,7 +34,6 @@ class RecipeViewSet(ModelViewSet):
     preventing any user from listing, retrieving, or mutating another user's recipes.
     """
 
-    serializer_class: type[BaseSerializer] | None = RecipeSerializer
     queryset = Recipe.objects.all()
     authentication_classes: Sequence[type[BaseAuthentication]] = [TokenAuthentication]
     permission_classes = [
@@ -63,3 +61,31 @@ class RecipeViewSet(ModelViewSet):
         signature omits an explicit annotation.
         """
         return self.queryset.filter(user=self.request.user).order_by("-id")
+
+    def get_serializer_class(
+        self,
+    ) -> type[RecipeDetailSerializer] | type[RecipeSerializer]:
+        """
+        Return the serializer class appropriate for the current router action.
+
+        DRF calls this method (instead of reading `serializer_class` directly)
+        when it needs to instantiate a serializer, making it the correct hook
+        for per-action serializer switching. `self.action` is set by the router
+        before the view method executes and maps to the logical operation name:
+        ``"list"``, ``"retrieve"``, ``"create"``, ``"update"``, ``"partial_update"``,
+        or ``"destroy"``.
+
+        ``RecipeSerializer`` is returned for ``"list"`` because list responses
+        contain many rows and the ``description`` TextField is omitted to keep
+        payload size small.
+
+        All other actions (``"retrieve"``, writes) receive ``RecipeDetailSerializer``
+        so that the full field set — including ``description`` — is available.
+        Writes also benefit from this: a ``create`` or ``update`` caller can supply
+        ``description`` and have it validated and saved by the same serializer
+        that the ``retrieve`` action uses to read it back.
+        """
+        if self.action == "list":
+            return RecipeSerializer
+
+        return RecipeDetailSerializer

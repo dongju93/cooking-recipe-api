@@ -36,3 +36,26 @@ class RecipeSerializer(ModelSerializer):
         model: type[Recipe] = Recipe
         fields: list[str] = ["id", "title", "time_minutes", "price", "link"]
         read_only_fields: list[str] = ["id"]
+
+
+class RecipeDetailSerializer(RecipeSerializer):
+    """
+    Serializer for the single-object recipe detail endpoint.
+
+    Extends RecipeSerializer so all list-safe fields (id, title, time_minutes,
+    price, link) are inherited without repetition. The inner Meta subclasses
+    RecipeSerializer.Meta directly, meaning both `model` and `read_only_fields`
+    are already set and only `fields` needs to be widened.
+
+    The additional field — `description` — is a TextField that may contain
+    several kilobytes of text. Excluding it from the list serializer avoids
+    inflating every row in a paginated list response; it is only fetched and
+    serialised when a caller explicitly requests a single recipe by pk.
+
+    `RecipeSerializer.Meta.fields + ["description"]` appends to the parent's
+    field list at class definition time, keeping the field order predictable
+    and making it obvious at a glance which extra fields the detail view exposes.
+    """
+
+    class Meta(RecipeSerializer.Meta):
+        fields: list[str] = RecipeSerializer.Meta.fields + ["description"]
