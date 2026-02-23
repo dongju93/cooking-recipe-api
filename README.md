@@ -138,7 +138,7 @@ Credentials are sent with every request. The server decodes and validates them a
 
 ```
 # Login — exchange credentials for a token
-POST /api/user/token  { "email": "...", "password": "..." }
+POST /api/v1/user/token  { "email": "...", "password": "..." }
 ← { "token": "abc123..." }
 
 # Subsequent requests — send token in header

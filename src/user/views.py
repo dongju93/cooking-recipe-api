@@ -22,7 +22,7 @@ class CreateUserView(CreateAPIView):
     Internally it mixes in CreateModelMixin (which implements `create()`) and
     GenericAPIView (which wires up the serializer and response helpers).
 
-    The full request lifecycle for POST /api/user/create:
+    The full request lifecycle for POST /api/v1/user/create:
       1. `post()` is called → delegates to `create()` in CreateModelMixin.
       2. `get_serializer(data=request.data)` instantiates UserSerializer with the
          incoming payload.
@@ -108,7 +108,7 @@ class ManageUserView(RetrieveUpdateAPIView):
         implementation performs a queryset lookup using the URL pk keyword argument.
 
         Returning `request.user` bypasses the queryset lookup entirely — there is no
-        pk in the URL for this endpoint (the path is simply /api/user/me). The user
+        pk in the URL for this endpoint (the path is simply /api/v1/user/me). The user
         identified by the token is both the subject and the only accessible object,
         so no further filtering or permission check is needed beyond `IsAuthenticated`.
         """
