@@ -230,6 +230,7 @@ class Recipe(Model):
     user: ForeignKey = ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=CASCADE,
+        related_name="recipes",
     )
     title: CharField = CharField(max_length=255)
     description: TextField = TextField(blank=True)
