@@ -96,7 +96,7 @@ docker compose up
 
 ## GitHub Actions
 
-### How it works?
+### How it works
 
 ```mermaid
 flowchart LR
