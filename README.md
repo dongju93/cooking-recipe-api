@@ -101,7 +101,7 @@ docker compose up
 ```mermaid
 flowchart LR
     subgraph Trigger
-        A(GitHub target branch Push)
+        A(GitHub Push)
     end
     A --> B
     subgraph Job
