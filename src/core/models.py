@@ -8,6 +8,7 @@ from django.contrib.auth.base_user import (
     BaseUserManager,
 )
 from django.contrib.auth.models import PermissionsMixin
+from django.core.validators import MinValueValidator
 from django.db.models import (
     CASCADE,
     BooleanField,
@@ -233,7 +234,11 @@ class Recipe(Model):
     title: CharField = CharField(max_length=255)
     description: TextField = TextField(blank=True)
     time_minutes: IntegerField = IntegerField()
-    price: DecimalField = DecimalField(max_digits=5, decimal_places=2)
+    price: DecimalField = DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+    )
     link: CharField = CharField(max_length=255, blank=True)
 
     def __str__(self) -> str:
