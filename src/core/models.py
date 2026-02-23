@@ -233,7 +233,7 @@ class Recipe(Model):
     )
     title: CharField = CharField(max_length=255)
     description: TextField = TextField(blank=True)
-    time_minutes: IntegerField = IntegerField()
+    time_minutes: IntegerField = IntegerField(validators=[MinValueValidator(1)])
     price: DecimalField = DecimalField(
         max_digits=5,
         decimal_places=2,
