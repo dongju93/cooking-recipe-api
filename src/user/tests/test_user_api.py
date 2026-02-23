@@ -187,7 +187,7 @@ class PublicUserApiTests(TestCase):
 
     def test_retrieve_user_unauthorized(self) -> None:
         """
-        GET /api/user/me without a token returns 401 Unauthorized.
+        GET /api/v1/user/me without a token returns 401 Unauthorized.
 
         No `force_authenticate()` or `Authorization` header is set on the client,
         so the request arrives without credentials. `TokenAuthentication` returns
@@ -232,7 +232,7 @@ class PrivateUserApiTests(TestCase):
 
     def test_retrieve_profile_success(self) -> None:
         """
-        GET /api/user/me returns 200 with the authenticated user's email and name.
+        GET /api/v1/user/me returns 200 with the authenticated user's email and name.
 
         The response body is compared against `{name, email}` — the two readable
         fields exposed by `UserSerializer`. `password` must be absent (`write_only=True`),
@@ -253,7 +253,7 @@ class PrivateUserApiTests(TestCase):
 
     def test_post_me_not_allowed(self) -> None:
         """
-        POST /api/user/me returns 405 Method Not Allowed.
+        POST /api/v1/user/me returns 405 Method Not Allowed.
 
         `RetrieveUpdateAPIView` only mixes in `retrieve()` (GET) and `update()`
         (PUT/PATCH) — there is no `create()` handler. DRF automatically returns
@@ -266,7 +266,7 @@ class PrivateUserApiTests(TestCase):
 
     def test_update_user_profile(self) -> None:
         """
-        PATCH /api/user/me updates name and password for the authenticated user.
+        PATCH /api/v1/user/me updates name and password for the authenticated user.
 
         Three assertions together verify the full update contract:
           1. `self.user.name == payload["name"]` — the name field was persisted;

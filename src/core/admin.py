@@ -76,7 +76,7 @@ class UserAdmin(BaseUserAdmin):
     #   └──────────────────────────────┘
     fieldsets: ClassVar[tuple] = (  # type: ignore[bad-override]
         # Fieldset 1: Credentials (no heading, always shown)
-        (None, {"fields": ("email", "password")}),
+        (None, {"fields": ("email", "password", "name")}),
         # Fieldset 2: Permissions (titled section for privilege management)
         (
             _lazy("Permissions"),  # _lazy() for lazy translation support

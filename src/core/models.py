@@ -8,6 +8,7 @@ from django.contrib.auth.base_user import (
     BaseUserManager,
 )
 from django.contrib.auth.models import PermissionsMixin
+from django.core.validators import MinValueValidator
 from django.db.models import (
     CASCADE,
     BooleanField,
@@ -71,7 +72,7 @@ class UserManagement(BaseUserManager["User"]):
 
         return user
 
-    def create_superuser(self, email: str, password: str) -> User:
+    def create_superuser(self, email: str, password: str) -> "User":
         """
         Create and return a superuser with is_staff=True and is_superuser=True.
 
@@ -229,11 +230,16 @@ class Recipe(Model):
     user: ForeignKey = ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=CASCADE,
+        related_name="recipes",
     )
     title: CharField = CharField(max_length=255)
     description: TextField = TextField(blank=True)
-    time_minutes: IntegerField = IntegerField()
-    price: DecimalField = DecimalField(max_digits=5, decimal_places=2)
+    time_minutes: IntegerField = IntegerField(validators=[MinValueValidator(1)])
+    price: DecimalField = DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+    )
     link: CharField = CharField(max_length=255, blank=True)
 
     def __str__(self) -> str:

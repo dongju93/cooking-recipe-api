@@ -1,11 +1,17 @@
 """Tests for the custom User model in core."""
 
+from __future__ import annotations
+
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from ..models import Recipe, User
+from ..models import Recipe
+
+if TYPE_CHECKING:
+    from ..models import User
 
 
 class ModelTests(TestCase):
