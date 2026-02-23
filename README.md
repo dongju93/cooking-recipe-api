@@ -104,21 +104,17 @@ flowchart LR
         A(GitHub Push)
     end
     A --> B
-    subgraph Job
-        B(Pytest)
-        C(Deploy)
+    subgraph Job[Job: test-lint]
+        B(Login to Docker Hub) --> C(Checkout)
+        C --> D(Test)
+        D --> E(Lint)
     end
-    B --pass--> C
-    B --fail--> E
-    C --pass--> D
-    C --fail--> E
+    E --pass--> F
+    E --fail--> G
+    D --fail--> G
     subgraph Result
-        D(Succeeded)
-        E(Failed)
-    end
-    D --> G
-    subgraph G['optional' Notification]
-        F(Preferred Platform)
+        F(Succeeded)
+        G(Failed)
     end
 ```
 
