@@ -71,7 +71,7 @@ class UserManagement(BaseUserManager["User"]):
 
         return user
 
-    def create_superuser(self, email: str, password: str) -> User:
+    def create_superuser(self, email: str, password: str) -> "User":
         """
         Create and return a superuser with is_staff=True and is_superuser=True.
 
