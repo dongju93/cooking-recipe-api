@@ -240,3 +240,180 @@ class PrivateRecipeApiTests(TestCase):
             self.assertEqual(getattr(recipe, key), value)
 
         self.assertEqual(recipe.user, self.user)
+
+    def test_get_other_users_recipe_detail(self) -> None:
+        """
+        GET /api/v1/recipe/{pk} for another user's recipe returns 404 Not Found.
+
+        ``get_queryset()`` filters to ``user=request.user`` before any object
+        lookup occurs.  DRF's ``get_object()`` calls ``get_queryset()`` to build
+        the base queryset and then performs a ``.get(pk=pk)`` on that filtered
+        set.  Because the recipe belongs to ``other_user``, it is absent from
+        the filtered queryset and the lookup raises ``Http404`` — the same
+        response a non-existent pk would produce.
+
+        This is the canonical "data-scoping" security pattern: ownership is
+        enforced at the queryset level rather than with an explicit object-
+        permission check.  The 404 (rather than 403) is intentional — leaking
+        which pks exist would itself be an information disclosure.
+        """
+        other_user = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+            email="other@example.com", password="testpass123"
+        )
+        recipe: Recipe = create_recipe(user=other_user)
+
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.get(url)
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_full_update_recipe(self) -> None:
+        """
+        PUT /api/v1/recipe/{pk} with a complete payload updates all fields and returns 200.
+
+        A PUT replaces the full resource representation.  ``RecipeDetailSerializer``
+        is used for write actions (``get_serializer_class()`` returns it for any
+        action other than ``"list"``), so all fields except the read-only ``id``
+        must be supplied or have model-level defaults (``blank=True``).
+
+        The test verifies three guarantees:
+
+        1. **HTTP 200 OK** — the serializer accepted the payload, ran validators,
+           and saved without errors.
+
+        2. **All payload fields are persisted** — ``recipe.refresh_from_db()``
+           reloads the row and the loop confirms every payload key reached the
+           database, not just the serializer output layer.
+
+        3. **Owner is preserved** — ``recipe.user`` is not a serializer field, so
+           a PUT cannot reassign ownership; the assertion confirms it remains
+           ``self.user`` after the update.
+        """
+        recipe: Recipe = create_recipe(user=self.user)
+
+        payload: dict[str, Decimal | int | str] = {
+            "title": "Updated Recipe Title",
+            "time_minutes": 45,
+            "price": Decimal("10.00"),
+            "description": "Updated description.",
+            "link": "https://example.com/updated.pdf",
+        }
+
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.put(url, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        recipe.refresh_from_db()
+        for key, value in payload.items():
+            self.assertEqual(getattr(recipe, key), value)
+
+        self.assertEqual(recipe.user, self.user)
+
+    def test_partial_update_recipe(self) -> None:
+        """
+        PATCH /api/v1/recipe/{pk} with a subset of fields updates only those fields.
+
+        A PATCH sends only the fields that should change; omitted fields must
+        retain their original values.  DRF's ``UpdateModelMixin.partial_update()``
+        passes ``partial=True`` to the serializer, which marks every field as
+        non-required so the validator accepts incomplete payloads without error.
+
+        The test asserts both sides of this contract:
+          - ``recipe.title`` changes to the patched value.
+          - ``recipe.link`` is unchanged — confirming that ``partial=True``
+            does not silently blank out omitted fields.
+
+        Ownership is also verified: a PATCH must never reassign ``recipe.user``.
+        """
+        original_link: str = "https://example.com/recipe.pdf"
+        recipe: Recipe = create_recipe(
+            user=self.user, title="Original Title", link=original_link
+        )
+
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.patch(url, {"title": "Patched Title"})
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        recipe.refresh_from_db()
+        self.assertEqual(recipe.title, "Patched Title")
+        self.assertEqual(recipe.link, original_link)
+        self.assertEqual(recipe.user, self.user)
+
+    def test_update_other_users_recipe(self) -> None:
+        """
+        PATCH /api/v1/recipe/{pk} on another user's recipe returns 404 and makes no change.
+
+        The same queryset-scoping that protects the retrieve action applies to
+        writes: ``get_queryset()`` filters to the requesting user's rows, so
+        ``get_object()`` cannot find a recipe owned by ``other_user`` and raises
+        ``Http404`` before any update logic runs.
+
+        The assertion that ``recipe.user`` is still ``other_user`` after the
+        request confirms that ownership was not silently transferred — the record
+        is completely untouched in the database.
+        """
+        other_user = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+            email="other@example.com", password="testpass123"
+        )
+        recipe: Recipe = create_recipe(user=other_user)
+        original_title: str = recipe.title  # type: ignore[missing-attribute]
+
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.patch(url, {"title": "Hijacked Title"})
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+        recipe.refresh_from_db()
+        self.assertEqual(recipe.title, original_title)
+        self.assertEqual(recipe.user, other_user)
+
+    def test_delete_recipe(self) -> None:
+        """
+        DELETE /api/v1/recipe/{pk} removes the recipe and returns 204 No Content.
+
+        DRF's ``DestroyModelMixin.destroy()`` calls ``get_object()`` (which applies
+        the user-scoped queryset), then ``perform_destroy(instance)``, which calls
+        ``instance.delete()``.  204 No Content is the standard success code for a
+        DELETE that produces no response body.
+
+        The ``assertFalse(Recipe.objects.filter(...).exists())`` assertion confirms
+        the row was actually removed from the database — not just that the HTTP
+        layer reported success.
+        """
+        recipe: Recipe = create_recipe(user=self.user)
+
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.delete(url)
+
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(
+            Recipe.objects.filter(id=recipe.id).exists()  # type: ignore[missing-attribute]
+        )
+
+    def test_delete_other_users_recipe(self) -> None:
+        """
+        DELETE /api/v1/recipe/{pk} on another user's recipe returns 404 and leaves the row intact.
+
+        ``get_object()`` resolves the pk against the user-filtered queryset, so a
+        recipe belonging to ``other_user`` is invisible to the requesting user's
+        client.  The 404 is returned before ``perform_destroy()`` is ever called,
+        meaning the row is never touched.
+
+        The ``assertTrue(Recipe.objects.filter(...).exists())`` assertion is the
+        critical second check: it confirms the recipe was not deleted as a side
+        effect of the 404 path.
+        """
+        other_user = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+            email="other@example.com", password="testpass123"
+        )
+        recipe: Recipe = create_recipe(user=other_user)
+
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.delete(url)
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(
+            Recipe.objects.filter(id=recipe.id).exists()  # type: ignore[missing-attribute]
+        )
