@@ -14,24 +14,19 @@ Django strips that prefix and passes the remainder to these patterns:
 reversed as ``"recipe:recipe-list"`` and ``"recipe:recipe-detail"``.
 """
 
-from django.urls import path
-from django.urls.resolvers import URLPattern
+from django.urls import include, path
+from django.urls.resolvers import URLResolver
+from rest_framework.routers import DefaultRouter
 
-from .views import RecipeViewSet
+from .views import RecipeViewSet, TagViewSet
 
 app_name = "recipe"
 
-_list = RecipeViewSet.as_view({"get": "list", "post": "create"})
-_detail = RecipeViewSet.as_view(
-    {
-        "get": "retrieve",
-        "put": "update",
-        "patch": "partial_update",
-        "delete": "destroy",
-    }
-)
 
-urlpatterns: list[URLPattern] = [
-    path("", _list, name="recipe-list"),
-    path("/<int:pk>", _detail, name="recipe-detail"),
+router = DefaultRouter()
+router.register("recipes", RecipeViewSet, basename="recipe")
+router.register("tags", TagViewSet, basename="tag")
+
+urlpatterns: list[URLResolver] = [
+    path("", include(router.urls)),
 ]
