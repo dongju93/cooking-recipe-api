@@ -2,7 +2,7 @@
 
 from rest_framework.serializers import ModelSerializer
 
-from core.models import Recipe
+from core.models import Recipe, Tag
 
 
 class RecipeSerializer(ModelSerializer):
@@ -50,7 +50,7 @@ class RecipeDetailSerializer(RecipeSerializer):
     The additional field — `description` — is a TextField that may contain
     several kilobytes of text. Excluding it from the list serializer avoids
     inflating every row in a paginated list response; it is only fetched and
-    serialised when a caller explicitly requests a single recipe by pk.
+    serialized when a caller explicitly requests a single recipe by pk.
 
     `RecipeSerializer.Meta.fields + ["description"]` appends to the parent's
     field list at class definition time, keeping the field order predictable
@@ -59,3 +59,29 @@ class RecipeDetailSerializer(RecipeSerializer):
 
     class Meta(RecipeSerializer.Meta):
         fields: list[str] = RecipeSerializer.Meta.fields + ["description"]
+
+
+class TagSerializer(ModelSerializer):
+    """
+    Serializer for listing and representing Tag objects.
+
+    A minimal serializer exposing only ``id`` and ``name`` — the complete set of
+    fields on the Tag model.  Unlike RecipeSerializer / RecipeDetailSerializer,
+    there is no "summary vs detail" split because Tag objects carry no heavy fields
+    that would warrant a separate detail serializer; every response can safely
+    include the full field set without inflating payload size.
+
+    ``read_only_fields = ["id"]`` prevents API consumers from supplying or
+    overwriting the primary key on write operations, while still including it in
+    every serialized response for client-side identification and subsequent lookups.
+
+    The ``# type: ignore[bad-override]`` on the inner Meta class silences the same
+    pyrefly false positive as in RecipeSerializer: re-declaring Meta as a nested
+    class attribute triggers a "bad-override" warning even though this is the
+    canonical DRF pattern and carries no runtime risk.
+    """
+
+    class Meta:  # type: ignore[bad-override]
+        model: type[Tag] = Tag
+        fields: list[str] = ["id", "name"]
+        read_only_fields: list[str] = ["id"]
