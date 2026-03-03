@@ -8,7 +8,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from core.models import Recipe
+from core.models import Recipe, Tag
 
 from ..serializers import RecipeDetailSerializer, RecipeSerializer
 
@@ -417,3 +417,94 @@ class PrivateRecipeApiTests(TestCase):
         self.assertTrue(
             Recipe.objects.filter(id=recipe.id).exists()  # type: ignore[missing-attribute]
         )
+
+    def test_create_recipe_with_new_tags(self) -> None:
+        """
+        POST /api/v1/recipe with a ``tags`` list creates the recipe and all new tags.
+
+        Verifies the end-to-end nested-write path introduced by overriding
+        ``RecipeSerializer.create()``.  Four things are asserted:
+
+        1. **HTTP 201 Created** — the serializer accepted the nested payload and
+           ``perform_create()`` persisted the record without errors.
+
+        2. **Exactly one recipe was created** — guards against accidental
+           duplication at the view or serializer layer.
+
+        3. **Both tags were attached** — ``recipe.tags.count() == 2`` confirms
+           the M2M relationship was populated, not just the recipe row itself.
+
+        4. **Each tag is scoped to the user** — the loop queries
+           ``recipe.tags.filter(name=..., user=self.user)`` to confirm that
+           ``get_or_create`` received the correct owner, preventing tags from
+           being created as orphans or assigned to the wrong user.
+
+        ``format="json"`` is required because the default ``multipart`` encoding
+        cannot represent nested lists; using JSON ensures the nested ``tags``
+        structure is serialized and parsed correctly by DRF.
+        """
+        payload = {
+            "title": "Thai Prawn Curry",
+            "time_minutes": 30,
+            "price": Decimal("2.50"),
+            "tags": [{"name": "Thai"}, {"name": "Dinner"}],
+        }
+        res = self.client.post(RECIPE_URL, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        recipes = Recipe.objects.filter(user=self.user)
+
+        self.assertEqual(recipes.count(), 1)
+        recipe: Recipe = recipes[0]
+        self.assertEqual(recipe.tags.count(), 2)
+
+        for tag in payload["tags"]:
+            self.assertTrue(
+                recipe.tags.filter(name=tag["name"], user=self.user).exists()
+            )
+
+    def test_create_recipe_with_existing_tags(self) -> None:
+        """
+        POST /api/v1/recipe with a tag name matching an existing tag reuses that tag.
+
+        The idempotency guarantee of ``Tag.objects.get_or_create()`` means that
+        submitting a tag whose ``(user, name)`` pair already exists in the database
+        must not create a second row — the existing Tag instance is reused and
+        added to the recipe's M2M relation instead.
+
+        The test pre-creates ``tag_indian`` directly via the ORM, then POSTs a
+        payload that includes ``{"name": "Indian"}`` alongside a new tag
+        ``{"name": "Breakfast"}``.  Assertions verify:
+
+        1. **HTTP 201 Created** — the payload is accepted despite a pre-existing tag.
+        2. **Exactly one recipe created** — no duplication side-effect.
+        3. **Two tags attached** — one reused, one newly created, confirming
+           the mixed existing-plus-new path works correctly.
+        4. **``tag_indian`` is the same ORM instance** — ``assertIn(tag_indian,
+           recipe.tags.all())`` compares by primary key, confirming
+           ``get_or_create`` returned the original object rather than a duplicate
+           with a new ``id``.
+        5. **Each tag name is queryable on the recipe** — the loop confirms both
+           tags are present and scoped to ``self.user``.
+        """
+        tag_indian: Tag = Tag.objects.create(user=self.user, name="Indian")
+        payload = {
+            "title": "Pongal",
+            "time_minutes": 60,
+            "price": Decimal("4.50"),
+            "tags": [{"name": "Indian"}, {"name": "Breakfast"}],
+        }
+        res = self.client.post(RECIPE_URL, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        recipes = Recipe.objects.filter(user=self.user)
+
+        self.assertEqual(recipes.count(), 1)
+        recipe: Recipe = recipes[0]
+        self.assertEqual(recipe.tags.count(), 2)
+        self.assertIn(tag_indian, recipe.tags.all())
+
+        for tag in payload["tags"]:
+            self.assertTrue(
+                recipe.tags.filter(name=tag["name"], user=self.user).exists()
+            )
