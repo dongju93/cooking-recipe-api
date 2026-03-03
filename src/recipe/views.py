@@ -3,7 +3,7 @@
 from typing import Sequence
 
 from rest_framework.authentication import BaseAuthentication, TokenAuthentication
-from rest_framework.mixins import ListModelMixin, UpdateModelMixin
+from rest_framework.mixins import DestroyModelMixin, ListModelMixin, UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.serializers import BaseSerializer
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
@@ -112,17 +112,17 @@ class RecipeViewSet(ModelViewSet):
         serializer.save(user=self.request.user)
 
 
-class TagViewSet(ListModelMixin, UpdateModelMixin, GenericViewSet):
+class TagViewSet(ListModelMixin, UpdateModelMixin, DestroyModelMixin, GenericViewSet):
     """
-    ViewSet providing list and update actions for the authenticated user's tags.
+    ViewSet providing list, update, and delete actions for the authenticated user's tags.
 
     Composed from ``ListModelMixin`` (``list``), ``UpdateModelMixin``
-    (``update`` and ``partial_update``), and ``GenericViewSet`` (which wires mixin
-    actions to DRF's dispatch machinery).  This intentionally omits ``create``,
-    ``retrieve``, and ``destroy`` — tags are managed indirectly through recipes, so
-    only listing and in-place renaming are exposed at this stage.  Adding a mixin
-    later (e.g. ``CreateModelMixin``) will extend the surface without touching
-    existing behavior.
+    (``update`` and ``partial_update``), ``DestroyModelMixin`` (``destroy``), and
+    ``GenericViewSet`` (which wires mixin actions to DRF's dispatch machinery).
+    This intentionally omits ``create`` and ``retrieve`` — tags are managed
+    indirectly through recipes, so only listing, in-place renaming, and deletion
+    are exposed at this stage.  Adding a mixin later (e.g. ``CreateModelMixin``)
+    will extend the surface without touching existing behavior.
 
     ``authentication_classes = [TokenAuthentication]`` and
     ``permission_classes = [IsAuthenticated]`` enforce the same auth contract as
