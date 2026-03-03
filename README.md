@@ -171,19 +171,29 @@ Making nested objects writable adds complexity: DRF cannot automatically infer h
 ```python
 def create(self, validated_data):
     tags_data = validated_data.pop("tags", [])
-    recipe = Recipe.objects.create(**validated_data)
-    recipe.tags.set([tag["id"] for tag in tags_data])
+    recipe = super().create(validated_data)
+    for tag_data in tags_data:
+        tag, _ = Tag.objects.get_or_create(user=recipe.user, name=tag_data["name"])
+        recipe.tags.add(tag)
     return recipe
 
 def update(self, instance, validated_data):
     tags_data = validated_data.pop("tags", None)
     instance = super().update(instance, validated_data)
     if tags_data is not None:
-        instance.tags.set([tag["id"] for tag in tags_data])
+        instance.tags.clear()
+        for tag_data in tags_data:
+            tag, _ = Tag.objects.get_or_create(user=instance.user, name=tag_data["name"])
+            instance.tags.add(tag)
     return instance
 ```
 
-In this project, `Tag` objects are managed through their own dedicated `/api/v1/tag` endpoint — writable nested serializers are intentionally avoided to keep each serializer's responsibility narrow.
+Two key details:
+
+- `pop("tags", [])` in `create()` vs `pop("tags", None)` in `update()` — using `None` as the sentinel in `update()` distinguishes "client omitted tags" (leave them alone) from "client sent `tags: []`" (clear all tags). Using `[]` as default would silently wipe tags on any PATCH that omits the field.
+- `get_or_create` instead of `create` — makes tag assignment idempotent. Two recipes can reference the same tag name without creating duplicates, and re-posting the same name is safe.
+
+In this project, `Tag` objects can also be managed through their own dedicated `/api/v1/tag` endpoint. Using `read_only=True` on the nested field and relying solely on that endpoint is a valid alternative that keeps each serializer's responsibility narrower — the trade-off is that clients must make separate requests to assign tags when creating a recipe.
 
 ## Django Migrations
 
