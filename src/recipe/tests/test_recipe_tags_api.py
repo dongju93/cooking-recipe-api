@@ -20,6 +20,18 @@ if TYPE_CHECKING:
 TAGS_URL: str = reverse("recipe:tag-list")
 
 
+def detail_url(tag_id: int) -> str:
+    """
+    Build the detail URL for a single tag resource.
+
+    Wraps ``reverse("recipe:tag-detail", args=[tag_id])`` so that tests do not
+    embed raw URL strings.  Using ``reverse()`` means the URL is derived from the
+    URLconf at test runtime, so renaming a path in ``urls.py`` is caught
+    immediately rather than silently producing 404s that mask the real failure.
+    """
+    return reverse("recipe:tag-detail", args=[tag_id])
+
+
 def create_user(email="user@example.com", password="testpass") -> "User":
     """
     Helper to create a User via the ORM, bypassing the API.
@@ -149,3 +161,29 @@ class PrivateTagsApiTests(TestCase):
         self.assertEqual(len(res.data), 1)  # type: ignore [missing-attribute]
         self.assertEqual(res.data[0]["name"], tag.name)  # type: ignore [missing-attribute]
         self.assertEqual(res.data[0]["id"], tag.id)  # type: ignore [missing-attribute]
+
+    def test_update_tag(self) -> None:
+        """
+        PATCH /api/v1/recipe/tag/<id> updates the tag's name and returns 200.
+
+        A tag is created directly via the ORM and then partially updated through
+        the API using ``PATCH`` (``partial_update``).  The test asserts two things:
+
+        1. **HTTP 200 OK** — ``UpdateModelMixin`` accepted the authenticated request
+           and returned a success status.
+
+        2. ``tag.name == payload["name"]`` — after calling ``refresh_from_db()``, the
+           database row reflects the new value, confirming the serializer validated
+           the payload and ``save()`` was called.  Relying on ``refresh_from_db()``
+           rather than re-querying the ORM directly guards against Django's
+           object-level caching returning a stale in-memory value.
+        """
+        tag: Tag = Tag.objects.create(user=self.user, name="After Dinner")
+
+        payload: dict[str, str] = {"name": "Dessert"}
+        url: str = detail_url(tag.id)  # type: ignore[missing-attribute]
+        res = self.client.patch(url, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        tag.refresh_from_db()
+        self.assertEqual(tag.name, payload["name"])
