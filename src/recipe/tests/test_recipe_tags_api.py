@@ -187,3 +187,29 @@ class PrivateTagsApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         tag.refresh_from_db()
         self.assertEqual(tag.name, payload["name"])
+
+    def test_delete_tag(self) -> None:
+        """
+        DELETE /api/v1/recipe/tag/<id> removes the tag and returns 204 No Content.
+
+        A tag is created directly via the ORM and then deleted through the API.
+        The test asserts two things:
+
+        1. **HTTP 204 No Content** — ``DestroyModelMixin`` accepted the request and
+           deleted the object without returning a response body, which is the
+           standard REST convention for a successful deletion.
+
+        2. ``Tag.objects.filter(id=tag.id).exists() is False`` — the row is no
+           longer present in the database, confirming that ``perform_destroy()``
+           (which calls ``instance.delete()``) was actually executed and not just
+           skipped or mocked by the view.  Checking via a fresh queryset rather
+           than re-fetching the instance rules out Django's object-level cache
+           returning a stale in-memory value.
+        """
+        tag: Tag = Tag.objects.create(user=self.user, name="Breakfast")
+
+        url: str = detail_url(tag.id)  # type: ignore[missing-attribute]
+        res = self.client.delete(url)
+
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Tag.objects.filter(id=tag.id).exists())  # type: ignore [missing-attribute]
