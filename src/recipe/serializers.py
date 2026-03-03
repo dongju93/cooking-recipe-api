@@ -1,8 +1,36 @@
 """Serializers for the recipe API."""
 
+from typing import Any
+
 from rest_framework.serializers import ModelSerializer
 
 from core.models import Recipe, Tag
+
+
+class TagSerializer(ModelSerializer):
+    """
+    Serializer for listing and representing Tag objects.
+
+    A minimal serializer exposing only ``id`` and ``name`` — the complete set of
+    fields on the Tag model.  Unlike RecipeSerializer / RecipeDetailSerializer,
+    there is no "summary vs detail" split because Tag objects carry no heavy fields
+    that would warrant a separate detail serializer; every response can safely
+    include the full field set without inflating payload size.
+
+    ``read_only_fields = ["id"]`` prevents API consumers from supplying or
+    overwriting the primary key on write operations, while still including it in
+    every serialized response for client-side identification and subsequent lookups.
+
+    The ``# type: ignore[bad-override]`` on the inner Meta class silences the same
+    pyrefly false positive as in RecipeSerializer: re-declaring Meta as a nested
+    class attribute triggers a "bad-override" warning even though this is the
+    canonical DRF pattern and carries no runtime risk.
+    """
+
+    class Meta:  # type: ignore[bad-override]
+        model: type[Tag] = Tag
+        fields: list[str] = ["id", "name"]
+        read_only_fields: list[str] = ["id"]
 
 
 class RecipeSerializer(ModelSerializer):
@@ -32,10 +60,41 @@ class RecipeSerializer(ModelSerializer):
     even though this is the canonical DRF pattern.
     """
 
+    tags = TagSerializer(many=True, required=False)
+
     class Meta:  # type: ignore[bad-override]
         model: type[Recipe] = Recipe
-        fields: list[str] = ["id", "title", "time_minutes", "price", "link"]
+        fields: list[str] = ["id", "title", "time_minutes", "price", "link", "tags"]
         read_only_fields: list[str] = ["id"]
+
+    def create(self, validated_data: dict[str, Any]) -> Recipe:
+        """
+        Persist a new Recipe and associate any supplied tags.
+
+        DRF's default ``ModelSerializer.create()`` calls
+        ``Model.objects.create(**validated_data)`` directly, which fails for M2M
+        or nested relations because the ORM cannot resolve them from a plain dict.
+        Overriding ``create()`` provides a hook to extract and handle the nested
+        ``tags`` list before delegating scalar-field creation to ``super().create()``.
+
+        ``validated_data.pop("tags", [])`` removes the key before the ``super()``
+        call so the parent does not encounter an unexpected keyword argument.  Using
+        ``pop`` with a default (rather than ``del``) handles the case where the
+        client omits the field entirely — ``required=False`` on the ``tags`` field
+        means it may be absent from ``validated_data`` altogether.
+
+        ``Tag.objects.get_or_create(user=recipe.user, name=tag_name)`` enforces
+        per-user tag uniqueness: if a tag with the same name already exists for
+        this user it is reused rather than duplicated, keeping tag management
+        idempotent across multiple recipe creates that share the same labels.
+        """
+        tags_data: list[dict[str, str]] = validated_data.pop("tags", [])
+        recipe: Recipe = super().create(validated_data)
+        for tag_data in tags_data:
+            tag_name: str = tag_data["name"]
+            tag, _ = Tag.objects.get_or_create(user=recipe.user, name=tag_name)
+            recipe.tags.add(tag)
+        return recipe
 
 
 class RecipeDetailSerializer(RecipeSerializer):
@@ -59,29 +118,3 @@ class RecipeDetailSerializer(RecipeSerializer):
 
     class Meta(RecipeSerializer.Meta):
         fields: list[str] = RecipeSerializer.Meta.fields + ["description"]
-
-
-class TagSerializer(ModelSerializer):
-    """
-    Serializer for listing and representing Tag objects.
-
-    A minimal serializer exposing only ``id`` and ``name`` — the complete set of
-    fields on the Tag model.  Unlike RecipeSerializer / RecipeDetailSerializer,
-    there is no "summary vs detail" split because Tag objects carry no heavy fields
-    that would warrant a separate detail serializer; every response can safely
-    include the full field set without inflating payload size.
-
-    ``read_only_fields = ["id"]`` prevents API consumers from supplying or
-    overwriting the primary key on write operations, while still including it in
-    every serialized response for client-side identification and subsequent lookups.
-
-    The ``# type: ignore[bad-override]`` on the inner Meta class silences the same
-    pyrefly false positive as in RecipeSerializer: re-declaring Meta as a nested
-    class attribute triggers a "bad-override" warning even though this is the
-    canonical DRF pattern and carries no runtime risk.
-    """
-
-    class Meta:  # type: ignore[bad-override]
-        model: type[Tag] = Tag
-        fields: list[str] = ["id", "name"]
-        read_only_fields: list[str] = ["id"]
