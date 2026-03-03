@@ -3,7 +3,7 @@
 from typing import Sequence
 
 from rest_framework.authentication import BaseAuthentication, TokenAuthentication
-from rest_framework.mixins import ListModelMixin
+from rest_framework.mixins import ListModelMixin, UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.serializers import BaseSerializer
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
@@ -112,16 +112,17 @@ class RecipeViewSet(ModelViewSet):
         serializer.save(user=self.request.user)
 
 
-class TagViewSet(ListModelMixin, GenericViewSet):
+class TagViewSet(ListModelMixin, UpdateModelMixin, GenericViewSet):
     """
-    ViewSet providing the list action for the authenticated user's tags.
+    ViewSet providing list and update actions for the authenticated user's tags.
 
-    Composed from ``ListModelMixin`` (which contributes only the ``list`` action)
-    and ``GenericViewSet`` (which wires mixin actions to DRF's dispatch machinery).
-    This intentionally omits create, retrieve, update, and destroy — tags are
-    managed indirectly through recipes, so only listing is exposed at this stage.
-    Adding a mixin later (e.g. ``CreateModelMixin``) will extend the surface without
-    touching the existing list behavior.
+    Composed from ``ListModelMixin`` (``list``), ``UpdateModelMixin``
+    (``update`` and ``partial_update``), and ``GenericViewSet`` (which wires mixin
+    actions to DRF's dispatch machinery).  This intentionally omits ``create``,
+    ``retrieve``, and ``destroy`` — tags are managed indirectly through recipes, so
+    only listing and in-place renaming are exposed at this stage.  Adding a mixin
+    later (e.g. ``CreateModelMixin``) will extend the surface without touching
+    existing behavior.
 
     ``authentication_classes = [TokenAuthentication]`` and
     ``permission_classes = [IsAuthenticated]`` enforce the same auth contract as
@@ -129,7 +130,8 @@ class TagViewSet(ListModelMixin, GenericViewSet):
     header or the view returns 401 Unauthorized before ``get_queryset()`` is reached.
 
     ``get_queryset()`` scopes the queryset to the requesting user so that tag lists
-    are always private — one user's tags are never visible to another user's client.
+    and updates are always private — one user's tags are never visible to or
+    modifiable by another user's client.
     """
 
     serializer_class: type[TagSerializer] = TagSerializer  # type: ignore[bad-override]
