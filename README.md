@@ -3,7 +3,7 @@
 ## Environment
 
 - Python 3.14
-- Django 6.0.2
+- Django 6.0.3
 - Django Rest Framework 3.16.1
 - Docker
 - GitHub Actions
@@ -193,7 +193,7 @@ Two key details:
 - `pop("tags", [])` in `create()` vs `pop("tags", None)` in `update()` — using `None` as the sentinel in `update()` distinguishes "client omitted tags" (leave them alone) from "client sent `tags: []`" (clear all tags). Using `[]` as default would silently wipe tags on any PATCH that omits the field.
 - `get_or_create` instead of `create` — makes tag assignment idempotent. Two recipes can reference the same tag name without creating duplicates, and re-posting the same name is safe.
 
-In this project, `Tag` objects can also be managed through their own dedicated `/api/v1/tag` endpoint. Using `read_only=True` on the nested field and relying solely on that endpoint is a valid alternative that keeps each serializer's responsibility narrower — the trade-off is that clients must make separate requests to assign tags when creating a recipe.
+In this project, `Tag` objects can also be managed through their own dedicated `/api/v1/recipe/tags` endpoint. Using `read_only=True` on the nested field and relying solely on that endpoint is a valid alternative that keeps each serializer's responsibility narrower — the trade-off is that clients must make separate requests to assign tags when creating a recipe.
 
 ## Django Migrations
 
