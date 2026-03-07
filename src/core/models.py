@@ -17,6 +17,7 @@ from django.db.models import (
     EmailField,
     ForeignKey,
     IntegerField,
+    ManyToManyField,
     Model,
     TextField,
 )
@@ -241,6 +242,9 @@ class Recipe(Model):
         validators=[MinValueValidator(0)],
     )
     link: CharField = CharField(max_length=255, blank=True)
+    tags: ManyToManyField = ManyToManyField(
+        "Tag",
+    )
 
     def __str__(self) -> str:
         """Return the recipe title as its human-readable string representation.
@@ -251,3 +255,45 @@ class Recipe(Model):
         primary key or other fields.
         """
         return self.title
+
+
+class Tag(Model):
+    """
+    Represents a label that can be applied to recipes, scoped to a specific user.
+
+    Tags are user-owned: each Tag row has a ForeignKey to the user who created it.
+    This ensures a user's tag list is private — listing tags for a user only
+    returns their own tags, not those created by other users.
+
+    The ManyToManyField on Recipe points to this model via the string "Tag" (a
+    forward reference resolved by Django's app registry at startup). Django creates
+    a join table (core_recipe_tags by default) with two FK columns: recipe_id and
+    tag_id. No intermediate model is needed here because the relationship carries
+    no additional data beyond the association itself.
+
+    on_delete=CASCADE mirrors the same choice made in Recipe: deleting a User
+    removes all their tags, preventing orphaned tag rows that reference a
+    non-existent user. Deleting a Tag does not delete associated Recipes — Django
+    removes only the rows in the join table, leaving both sides of the M2M intact.
+
+    related_name="tags" lets you navigate the reverse relation from a User instance:
+    `user.tags.all()` returns all Tag objects owned by that user, complementing
+    `user.recipes.all()` already provided by the Recipe FK.
+    """
+
+    name: CharField[str] = CharField(max_length=255)
+    user: ForeignKey["User"] = ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=CASCADE,
+        related_name="tags",
+    )
+
+    def __str__(self) -> str:
+        """Return the tag name as its human-readable string representation.
+
+        Django's admin changelist, shell introspection, and logging all call
+        __str__ when displaying model instances. Returning the name makes Tag
+        objects immediately identifiable without needing to inspect the primary
+        key or related user fields.
+        """
+        return self.name

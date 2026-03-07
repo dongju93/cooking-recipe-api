@@ -3,7 +3,7 @@
 ## Environment
 
 - Python 3.14
-- Django 6.0.2
+- Django 6.0.3
 - Django Rest Framework 3.16.1
 - Docker
 - GitHub Actions
@@ -87,6 +87,113 @@ docker compose up
 
 - Use `APIView` for auth/session-style endpoints and custom one-off actions.
 - Use `ModelViewSet` (or mixin-based ViewSet) for resource collections that need standard CRUD behavior.
+
+## DRF Serializers
+
+Serializers translate between complex Python objects (model instances, querysets) and primitive types that can be rendered into JSON or parsed from an incoming request body. They also perform validation — checking field types, constraints, and cross-field rules before any database write occurs.
+
+### ModelSerializer vs plain Serializer
+
+| Class             | When to use                                                            |
+| ----------------- | ---------------------------------------------------------------------- |
+| `ModelSerializer` | Model-backed resources where fields mirror DB columns                  |
+| `Serializer`      | Non-model data — custom validation, authentication, computed responses |
+
+In this project:
+
+- `RecipeSerializer`, `RecipeDetailSerializer`, `TagSerializer`, `UserSerializer` all extend `ModelSerializer` — they map directly to DB models and auto-derive field types from the model definition.
+- `AuthTokenSerializer` extends plain `Serializer` — it validates login credentials and has no corresponding model row.
+
+### Serializer Inheritance (list vs detail)
+
+A common pattern is to define a lightweight list serializer and extend it with a detail serializer that adds heavier fields:
+
+```python
+class RecipeSerializer(ModelSerializer):
+    class Meta:
+        model = Recipe
+        fields = ["id", "title", "time_minutes", "price", "link"]
+        read_only_fields = ["id"]
+
+class RecipeDetailSerializer(RecipeSerializer):
+    class Meta(RecipeSerializer.Meta):          # inherits model + read_only_fields
+        fields = RecipeSerializer.Meta.fields + ["description"]
+```
+
+`RecipeDetailSerializer.Meta` subclasses `RecipeSerializer.Meta` so `model` and `read_only_fields` are inherited automatically — only `fields` is widened to include `description`. The ViewSet selects the right serializer based on the action:
+
+```python
+def get_serializer_class(self):
+    if self.action == "list":
+        return RecipeSerializer       # lightweight: no description
+    return RecipeDetailSerializer     # full: includes description
+```
+
+This avoids sending multi-kilobyte description fields in every row of a paginated list response.
+
+### Nested Serializers
+
+A nested serializer embeds a related object's full representation inside a parent serializer's output instead of returning only a foreign key integer. The `Recipe` model has a `ManyToManyField` to `Tag`. Without nesting, DRF outputs only a list of tag PKs:
+
+```json
+{ "id": 1, "title": "Pasta", "tags": [3, 7] }
+```
+
+With a nested `TagSerializer`, the full tag objects appear inline:
+
+```json
+{
+  "id": 1,
+  "title": "Pasta",
+  "tags": [
+    { "id": 3, "name": "Italian" },
+    { "id": 7, "name": "Quick" }
+  ]
+}
+```
+
+To add nested read-only tags to `RecipeDetailSerializer`:
+
+```python
+class RecipeDetailSerializer(RecipeSerializer):
+    tags = TagSerializer(many=True, read_only=True)
+
+    class Meta(RecipeSerializer.Meta):
+        fields = RecipeSerializer.Meta.fields + ["description", "tags"]
+```
+
+`many=True` tells DRF to iterate over the M2M queryset and serialize each item. `read_only=True` makes the embedded list output-only — write operations use a separate endpoint.
+
+### Writable Nested Serializers
+
+Making nested objects writable adds complexity: DRF cannot automatically infer how to create or update nested rows. You must override `create()` and `update()` on the parent serializer:
+
+```python
+def create(self, validated_data):
+    tags_data = validated_data.pop("tags", [])
+    recipe = super().create(validated_data)
+    for tag_data in tags_data:
+        tag, _ = Tag.objects.get_or_create(user=recipe.user, name=tag_data["name"])
+        recipe.tags.add(tag)
+    return recipe
+
+def update(self, instance, validated_data):
+    tags_data = validated_data.pop("tags", None)
+    instance = super().update(instance, validated_data)
+    if tags_data is not None:
+        instance.tags.clear()
+        for tag_data in tags_data:
+            tag, _ = Tag.objects.get_or_create(user=instance.user, name=tag_data["name"])
+            instance.tags.add(tag)
+    return instance
+```
+
+Two key details:
+
+- `pop("tags", [])` in `create()` vs `pop("tags", None)` in `update()` — using `None` as the sentinel in `update()` distinguishes "client omitted tags" (leave them alone) from "client sent `tags: []`" (clear all tags). Using `[]` as default would silently wipe tags on any PATCH that omits the field.
+- `get_or_create` instead of `create` — makes tag assignment idempotent. Two recipes can reference the same tag name without creating duplicates, and re-posting the same name is safe.
+
+In this project, `Tag` objects can also be managed through their own dedicated `/api/v1/recipe/tags` endpoint. Using `read_only=True` on the nested field and relying solely on that endpoint is a valid alternative that keeps each serializer's responsibility narrower — the trade-off is that clients must make separate requests to assign tags when creating a recipe.
 
 ## Django Migrations
 

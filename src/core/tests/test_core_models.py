@@ -8,10 +8,28 @@ from typing import TYPE_CHECKING
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from ..models import Recipe
+from ..models import Recipe, Tag
 
 if TYPE_CHECKING:
     from ..models import User
+
+
+def create_user(
+    email: str = "user@example.com", password: str = "testpass123"
+) -> "User":
+    """
+    Factory helper that creates and returns a regular User for use in tests.
+
+    Default arguments let individual tests call `create_user()` with no arguments
+    when they only need a valid user and don't care about specific credentials.
+    Tests that need a distinct user (e.g. to verify isolation between users) can
+    override either argument: `create_user(email="other@example.com")`.
+
+    Uses get_user_model() rather than a direct import of core.models.User so that
+    this helper stays decoupled from the concrete model path and continues to work
+    correctly if AUTH_USER_MODEL is ever changed.
+    """
+    return get_user_model().objects.create_user(email=email, password=password)  # type: ignore[missing-attribute]
 
 
 class ModelTests(TestCase):
@@ -136,3 +154,21 @@ class ModelTests(TestCase):
         )
 
         self.assertEqual(str(recipe), recipe.title)
+
+    def test_create_tag(self) -> None:
+        """
+        Tag is created with a name and owner, and __str__ returns the tag name.
+
+        Verifies two things in one pass:
+          1. Tag.objects.create() persists a valid Tag row linked to a user.
+          2. str(tag) delegates to __str__ and returns the name field, matching
+             the convention established by Recipe.__str__ and used by the admin,
+             shell, and logging throughout the project.
+
+        The `create_user()` helper is used here rather than repeating the
+        get_user_model() pattern, keeping the test focused on Tag behaviour.
+        """
+        user: User = create_user()
+        tag: Tag = Tag.objects.create(user=user, name="Tag1")
+
+        self.assertEqual(str(tag), tag.name)

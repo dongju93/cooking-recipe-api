@@ -4,7 +4,7 @@ import os
 import sys
 
 
-def main():
+def main() -> None:
     """Run administrative tasks."""
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     # Keep argv[0] absolute so Django autoreload can re-run this script after cwd changes.
