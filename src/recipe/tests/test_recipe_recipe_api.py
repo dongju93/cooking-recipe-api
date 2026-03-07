@@ -508,3 +508,91 @@ class PrivateRecipeApiTests(TestCase):
             self.assertTrue(
                 recipe.tags.filter(name=tag["name"], user=self.user).exists()
             )
+
+    def test_create_tag_on_update(self) -> None:
+        """
+        PATCH /api/v1/recipe/<id> with a new tag name creates and attaches that tag.
+
+        Verifies that ``update()`` calls ``_get_or_create_tags()``, which will
+        create a Tag row when the supplied name does not yet exist for the user,
+        then add it to the recipe's M2M set.
+
+        The recipe starts with no tags.  After the PATCH:
+
+        1. **HTTP 200 OK** — the payload is accepted.
+        2. **Tag "Lunch" exists in the database** — ``Tag.objects.get()`` would
+           raise ``DoesNotExist`` if ``get_or_create`` had not been called.
+        3. **Tag is attached to the recipe** — ``assertIn`` checks the M2M set.
+        """
+        recipe: Recipe = create_recipe(user=self.user)
+
+        payload: dict[str, list[dict[str, str]]] = {"tags": [{"name": "Lunch"}]}
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.patch(url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        new_tag: Tag = Tag.objects.get(user=self.user, name="Lunch")
+        self.assertIn(new_tag, recipe.tags.all())
+
+    def test_update_recipe_assign_tag(self) -> None:
+        """
+        PATCH /api/v1/recipe/<id> with a different tag replaces the entire M2M set.
+
+        Confirms the "clear-then-add" semantics of ``update()``: when ``tags``
+        is present in the payload, the existing M2M relationship is wiped via
+        ``instance.tags.clear()`` before the new tag list is applied.  A tag
+        that was previously attached must no longer appear on the recipe after
+        the update.
+
+        Setup: a recipe is created and ``tag_breakfast`` is manually attached.
+        The PATCH payload contains only ``{"name": "Lunch"}``.
+
+        Assertions after the PATCH:
+
+        1. **HTTP 200 OK** — the payload is accepted.
+        2. **``tag_lunch`` is now attached** — the new tag was added.
+        3. **``tag_breakfast`` is no longer attached** — the old tag was removed
+           by ``clear()``, demonstrating that the update replaces rather than
+           appends.
+        """
+        tag_breakfast: Tag = Tag.objects.create(user=self.user, name="Breakfast")
+        recipe: Recipe = create_recipe(user=self.user)
+        recipe.tags.add(tag_breakfast)
+
+        tag_lunch: Tag = Tag.objects.create(user=self.user, name="Lunch")
+        payload: dict[str, list[dict[str, str]]] = {"tags": [{"name": "Lunch"}]}
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.patch(url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn(tag_lunch, recipe.tags.all())
+        self.assertNotIn(tag_breakfast, recipe.tags.all())
+
+    def test_clear_recipe_tags(self) -> None:
+        """
+        PATCH /api/v1/recipe/<id> with an empty tags list removes all tags.
+
+        Exercises the explicit-empty-list branch of ``update()``: sending
+        ``{"tags": []}`` signals intent to clear all tags, which is
+        distinguished from omitting the ``tags`` key entirely (which leaves
+        the M2M set unchanged).
+
+        Setup: a recipe is created and ``tag`` is manually attached via the ORM.
+        The PATCH payload is ``{"tags": []}``.
+
+        Assertions after the PATCH:
+
+        1. **HTTP 200 OK** — an empty tags list is a valid payload.
+        2. **``recipe.tags.count() == 0``** — all tags were removed; the M2M
+           join table has no rows for this recipe.
+        """
+        tag: Tag = Tag.objects.create(user=self.user, name="Dessert")
+        recipe: Recipe = create_recipe(user=self.user)
+        recipe.tags.add(tag)
+
+        payload: dict[str, list] = {"tags": []}
+        url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
+        res = self.client.patch(url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(recipe.tags.count(), 0)
