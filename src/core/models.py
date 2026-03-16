@@ -245,6 +245,7 @@ class Recipe(Model):
     tags: ManyToManyField = ManyToManyField(
         "Tag",
     )
+    ingredients: ManyToManyField = ManyToManyField("Ingredient")
 
     def __str__(self) -> str:
         """Return the recipe title as its human-readable string representation.
@@ -293,6 +294,49 @@ class Tag(Model):
 
         Django's admin changelist, shell introspection, and logging all call
         __str__ when displaying model instances. Returning the name makes Tag
+        objects immediately identifiable without needing to inspect the primary
+        key or related user fields.
+        """
+        return self.name
+
+
+class Ingredient(Model):
+    """
+    Represents a single ingredient that can be associated with recipes, scoped to a user.
+
+    Ingredients are user-owned: each Ingredient row has a ForeignKey to the user
+    who created it. This ensures a user's ingredient list is private — listing
+    ingredients for a user only returns their own, not those created by other users.
+
+    The ManyToManyField on Recipe points to this model via the string "Ingredient"
+    (a forward reference resolved by Django's app registry at startup). Django creates
+    a join table (core_recipe_ingredients by default) with two FK columns: recipe_id
+    and ingredient_id. No intermediate model is needed here because the relationship
+    carries no additional data beyond the association itself.
+
+    on_delete=CASCADE mirrors the same choice made in Recipe and Tag: deleting a User
+    removes all their ingredients, preventing orphaned ingredient rows that reference a
+    non-existent user. Deleting an Ingredient does not delete associated Recipes —
+    Django removes only the rows in the join table, leaving both sides of the M2M intact.
+
+    related_name="ingredients" lets you navigate the reverse relation from a User instance:
+    `user.ingredients.all()` returns all Ingredient objects owned by that user,
+    complementing `user.recipes.all()` and `user.tags.all()` already provided by the
+    Recipe and Tag FKs.
+    """
+
+    name: CharField[str] = CharField(max_length=255)
+    user: ForeignKey["User"] = ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=CASCADE,
+        related_name="ingredients",
+    )
+
+    def __str__(self) -> str:
+        """Return the ingredient name as its human-readable string representation.
+
+        Django's admin changelist, shell introspection, and logging all call
+        __str__ when displaying model instances. Returning the name makes Ingredient
         objects immediately identifiable without needing to inspect the primary
         key or related user fields.
         """
