@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from ..models import Recipe, Tag
+from ..models import Ingredient, Recipe, Tag
 
 if TYPE_CHECKING:
     from ..models import User
@@ -172,3 +172,23 @@ class ModelTests(TestCase):
         tag: Tag = Tag.objects.create(user=user, name="Tag1")
 
         self.assertEqual(str(tag), tag.name)
+
+    def test_create_ingredient(self) -> None:
+        """
+        Ingredient is created with a name and owner, and __str__ returns the ingredient name.
+
+        Verifies two things in one pass:
+          1. Ingredient.objects.create() persists a valid Ingredient row linked to a user.
+          2. str(ingredient) delegates to __str__ and returns the name field, matching
+             the convention established by Recipe.__str__ and Tag.__str__ and used by
+             the admin, shell, and logging throughout the project.
+
+        The `create_user()` helper is used here rather than repeating the
+        get_user_model() pattern, keeping the test focused on Ingredient behaviour.
+        """
+        user: User = create_user()
+        ingredient: Ingredient = Ingredient.objects.create(
+            user=user, name="Ingredient1"
+        )
+
+        self.assertEqual(str(ingredient), ingredient.name)
