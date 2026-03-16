@@ -4,7 +4,33 @@ from typing import Any
 
 from rest_framework.serializers import ModelSerializer
 
-from core.models import Recipe, Tag
+from core.models import Ingredient, Recipe, Tag
+
+
+class IngredientSerializer(ModelSerializer):
+    """
+    Serializer for listing and representing Ingredient objects.
+
+    A minimal serializer exposing only ``id`` and ``name`` — the complete set of
+    fields on the Ingredient model.  No "summary vs detail" split is needed
+    because Ingredient objects carry no heavy fields that would warrant a
+    separate detail serializer; every response can safely include the full
+    field set without inflating payload size.
+
+    ``read_only_fields = ["id"]`` prevents API consumers from supplying or
+    overwriting the primary key on write operations, while still including it in
+    every serialized response for client-side identification and subsequent lookups.
+
+    The ``# type: ignore[bad-override]`` on the inner Meta class silences the
+    pyrefly false positive triggered when a nested ``Meta`` class attribute is
+    re-declared in a ModelSerializer subclass — this is the canonical DRF pattern
+    and carries no runtime risk.
+    """
+
+    class Meta:  # type: ignore[bad-override]
+        model: type[Ingredient] = Ingredient
+        fields: list[str] = ["id", "name"]
+        read_only_fields: list[str] = ["id"]
 
 
 class TagSerializer(ModelSerializer):

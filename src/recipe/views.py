@@ -8,9 +8,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.serializers import BaseSerializer
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
-from core.models import Recipe, Tag
+from core.models import Ingredient, Recipe, Tag
 
-from .serializers import RecipeDetailSerializer, RecipeSerializer, TagSerializer
+from .serializers import (
+    IngredientSerializer,
+    RecipeDetailSerializer,
+    RecipeSerializer,
+    TagSerializer,
+)
 
 
 class RecipeViewSet(ModelViewSet):
@@ -157,3 +162,53 @@ class TagViewSet(ListModelMixin, UpdateModelMixin, DestroyModelMixin, GenericVie
         against the concrete return type when the method omits an explicit annotation.
         """
         return self.queryset.filter(user=self.request.user).order_by("-name")
+
+
+class IngredientViewSet(ListModelMixin, GenericViewSet):
+    """
+    ViewSet providing only the list action for the authenticated user's ingredients.
+
+    Composed from ``ListModelMixin`` (``list``) and ``GenericViewSet`` (which wires
+    mixin actions to DRF's dispatch machinery).  Create, update, retrieve, and
+    destroy are intentionally omitted at this stage — ingredients are expected to
+    be managed indirectly through recipe creation in a future iteration.  Adding a
+    mixin later (e.g. ``CreateModelMixin``) will extend the surface without touching
+    existing behavior.
+
+    ``authentication_classes = [TokenAuthentication]`` and
+    ``permission_classes = [IsAuthenticated]`` enforce the same auth contract as
+    ``RecipeViewSet`` and ``TagViewSet``: every request must carry a valid
+    ``Authorization: Token <key>`` header or the view returns 401 Unauthorized
+    before ``get_queryset()`` is reached.
+
+    ``get_queryset()`` scopes the queryset to the requesting user so that
+    ingredient lists are always private — one user's ingredients are never visible
+    to another user's client.
+    """
+
+    serializer_class: type[IngredientSerializer] = IngredientSerializer  # type: ignore[bad-override]
+    query_set = Ingredient.objects.all()
+    authentication_classes: Sequence[type[BaseAuthentication]] = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):  # type: ignore[bad-override]
+        """
+        Return only the ingredients owned by the currently authenticated user.
+
+        Mirrors the user-scoping pattern from ``RecipeViewSet.get_queryset()`` and
+        ``TagViewSet.get_queryset()``: the class-level ``query_set`` is intentionally
+        broad (all ingredients in the database), and this override applies
+        ``.filter(user=request.user)`` to ensure the list action never exposes
+        another user's ingredients.
+
+        ``order_by("-name")`` sorts ingredients in reverse alphabetical order,
+        matching the ordering convention used by ``TagViewSet``.  A name-based sort
+        provides a semantically meaningful, stable ordering for ingredient lists
+        where alphabetical grouping is more useful than insertion order.
+
+        ``# type: ignore[bad-override]`` suppresses the same pyrefly false positive
+        as in ``RecipeViewSet`` and ``TagViewSet``: the parent's generic return type
+        cannot be matched against the concrete return type when the method omits an
+        explicit annotation.
+        """
+        return self.query_set.filter(user=self.request.user).order_by("-name")
