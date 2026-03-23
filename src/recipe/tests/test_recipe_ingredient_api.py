@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib.auth import get_user_model
+from django.db.models import QuerySet
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.response import Response
 from rest_framework.test import APIClient
 
 from core.models import Ingredient
@@ -17,6 +19,19 @@ from ..serializers import IngredientSerializer
 if TYPE_CHECKING:
     from core.models import User
 INGREDIENT_URL: str = reverse("recipe:ingredient-list")
+
+
+def detail_url(ingredient_id: int) -> str:
+    """
+    Build the detail URL for a single ingredient resource.
+
+    Wraps ``reverse("recipe:ingredient-detail", args=[ingredient_id])`` so that
+    tests do not embed raw URL strings.  Using ``reverse()`` means the URL is
+    derived from the URLconf at test runtime, so renaming a path in ``urls.py``
+    is caught immediately rather than silently producing 404s that mask the real
+    failure.
+    """
+    return reverse("recipe:ingredient-detail", args=[ingredient_id])
 
 
 def create_user(email="user@example.com", password="testpass") -> "User":
@@ -63,7 +78,7 @@ class PublicIngredientsApiTests(TestCase):
         ever reached — confirming the ingredients endpoint is protected and cannot
         be accessed anonymously.
         """
-        res = self.client.get(INGREDIENT_URL)
+        res: Response = cast(Response, self.client.get(INGREDIENT_URL))
 
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -118,13 +133,13 @@ class PrivateIngredientsApiTests(TestCase):
 
         Ingredient.objects.create(user=self.user, name="Vanilla")
 
-        res = self.client.get(INGREDIENT_URL)
+        res: Response = cast(Response, self.client.get(INGREDIENT_URL))
 
-        ingredients = Ingredient.objects.all().order_by("-name")
+        ingredients: QuerySet[Ingredient] = Ingredient.objects.all().order_by("-name")
         serializer = IngredientSerializer(ingredients, many=True)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data, serializer.data)  # type: ignore[missing-attribute]
+        self.assertEqual(res.data, serializer.data)
 
     def test_ingredients_limited_to_user(self) -> None:
         """
@@ -146,9 +161,40 @@ class PrivateIngredientsApiTests(TestCase):
             user=self.user, name="Pepper"
         )
 
-        res = self.client.get(INGREDIENT_URL)
+        res: Response = cast(Response, self.client.get(INGREDIENT_URL))
+
+        data: list[Any] = cast(list[Any], res.data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["name"], ingredient.name)
+        self.assertEqual(data[0]["id"], ingredient.id)
+
+    def test_update_ingredient(self) -> None:
+        """
+        PATCH /api/v1/recipe/ingredients/<id> updates the ingredient's name and returns 200.
+
+        An ingredient is created directly via the ORM and then partially updated
+        through the API using ``PATCH`` (``partial_update``).  The test asserts
+        two things:
+
+        1. **HTTP 200 OK** — ``UpdateModelMixin`` accepted the authenticated
+           request and returned a success status.
+
+        2. ``ingredient.name == payload["name"]`` — after calling
+           ``refresh_from_db()``, the database row reflects the new value,
+           confirming the serializer validated the payload and ``save()`` was
+           called.  Relying on ``refresh_from_db()`` rather than re-querying
+           the ORM directly guards against Django's object-level caching
+           returning a stale in-memory value.
+        """
+        ingredient: Ingredient = Ingredient.objects.create(
+            user=self.user, name="Cilantro"
+        )
+
+        payload: dict[str, str] = {"name": "Coriander"}
+        url: str = detail_url(ingredient.id)
+        res: Response = cast(Response, self.client.patch(url, payload))
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 1)  # type: ignore[missing-attribute]
-        self.assertEqual(res.data[0]["name"], ingredient.name)  # type: ignore[missing-attribute]
-        self.assertEqual(res.data[0]["id"], ingredient.id)  # type: ignore[missing-attribute]
+        ingredient.refresh_from_db()
+        self.assertEqual(ingredient.name, payload["name"])
