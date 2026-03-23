@@ -128,6 +128,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Equivalent to a SQLAlchemy Column(...) inside a mapped class.
     # ──────────────────────────────────────────────────────────────────────
 
+    id: int
     email: EmailField = EmailField(
         max_length=255,
         unique=True,
@@ -228,6 +229,7 @@ class Recipe(Model):
     monetary amounts to avoid rounding errors in totals or comparisons.
     """
 
+    id: int
     user: ForeignKey = ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=CASCADE,
@@ -282,6 +284,7 @@ class Tag(Model):
     `user.recipes.all()` already provided by the Recipe FK.
     """
 
+    id: int
     name: CharField[str] = CharField(max_length=255)
     user: ForeignKey["User"] = ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -325,6 +328,7 @@ class Ingredient(Model):
     Recipe and Tag FKs.
     """
 
+    id: int
     name: CharField[str] = CharField(max_length=255)
     user: ForeignKey["User"] = ForeignKey(
         settings.AUTH_USER_MODEL,
