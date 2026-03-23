@@ -1,6 +1,7 @@
 """Tests for Django admin customisation of the User model."""
 
 from django.contrib.auth import get_user_model
+from django.http import HttpResponse
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -51,7 +52,7 @@ class AdminSiteTests(TestCase):
         confirms that list_display is configured to include both fields.
         """
         url: str = reverse("admin:core_user_changelist")
-        response = self.client.get(url)
+        response: HttpResponse = self.client.get(url)
 
         self.assertContains(response, self.user.name)  # type: ignore[missing-attribute]
         self.assertContains(response, self.user.email)
@@ -66,7 +67,7 @@ class AdminSiteTests(TestCase):
         would raise a FieldError and return a 500 response.
         """
         url: str = reverse("admin:core_user_change", args=[self.user.id])  # type: ignore[missing-attribute]
-        response = self.client.get(url)
+        response: HttpResponse = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
 
@@ -80,6 +81,6 @@ class AdminSiteTests(TestCase):
         return a 500 response instead.
         """
         url: str = reverse("admin:core_user_add")
-        response = self.client.get(url)
+        response: HttpResponse = self.client.get(url)
 
         self.assertEqual(response.status_code, 200)
