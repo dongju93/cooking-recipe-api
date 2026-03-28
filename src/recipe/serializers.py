@@ -87,10 +87,19 @@ class RecipeSerializer(ModelSerializer):
     """
 
     tags = TagSerializer(many=True, required=False)
+    ingredients = IngredientSerializer(many=True, required=False)
 
     class Meta:  # type: ignore[bad-override]
         model: type[Recipe] = Recipe
-        fields: list[str] = ["id", "title", "time_minutes", "price", "link", "tags"]
+        fields: list[str] = [
+            "id",
+            "title",
+            "time_minutes",
+            "price",
+            "link",
+            "tags",
+            "ingredients",
+        ]
         read_only_fields: list[str] = ["id"]
 
     def _get_or_create_tags(self, tags: list[dict[str, str]], recipe: Recipe) -> None:
@@ -118,6 +127,34 @@ class RecipeSerializer(ModelSerializer):
             tag_obj, _ = Tag.objects.get_or_create(user=auth_user, name=tag["name"])
             recipe.tags.add(tag_obj)
 
+    def _get_or_create_ingredients(
+        self, ingredients: list[dict[str, str]], recipe: Recipe
+    ) -> None:
+        """
+        Resolve ingredient dicts to Ingredient ORM instances and attach them to a recipe.
+
+        Mirrors the design of ``_get_or_create_tags()``: extracted as a private
+        helper so both ``create()`` and ``update()`` share the same
+        ingredient-resolution logic without duplication.
+
+        ``self.context["request"].user`` is used as the owner rather than
+        ``recipe.user`` for the same reasons as in ``_get_or_create_tags()``:
+        it is the canonical DRF pattern for accessing the authenticated user
+        inside a serializer, avoids an extra DB hit, and remains consistent
+        whether the recipe is freshly created or pre-existing.
+
+        ``Ingredient.objects.get_or_create(user=auth_user, name=...)`` enforces
+        per-user ingredient uniqueness: if a matching ingredient already exists
+        it is reused rather than duplicated, keeping ingredient management
+        idempotent across multiple recipe writes that reference the same label.
+        """
+        auth_user = self.context["request"].user
+        for ingredient in ingredients:
+            ingredient_obj, _ = Ingredient.objects.get_or_create(
+                user=auth_user, name=ingredient["name"]
+            )
+            recipe.ingredients.add(ingredient_obj)
+
     def create(self, validated_data: dict[str, Any]) -> Recipe:
         """
         Persist a new Recipe and associate any supplied tags.
@@ -139,8 +176,10 @@ class RecipeSerializer(ModelSerializer):
         shared with ``update()`` to keep both write paths consistent.
         """
         tags: list[dict[str, str]] = validated_data.pop("tags", [])
+        ingredients = validated_data.pop("ingredients", [])
         recipe: Recipe = super().create(validated_data)
         self._get_or_create_tags(tags, recipe)
+        self._get_or_create_ingredients(ingredients, recipe)
 
         return recipe
 
@@ -171,9 +210,17 @@ class RecipeSerializer(ModelSerializer):
         are safely applied with ``setattr``.
         """
         tags: list[dict[str, str]] | None = validated_data.pop("tags", None)
+        ingredients: list[dict[str, str]] | None = validated_data.pop(
+            "ingredients", None
+        )
+
         if tags is not None:
             instance.tags.clear()
             self._get_or_create_tags(tags, instance)
+
+        if ingredients is not None:
+            instance.ingredients.clear()
+            self._get_or_create_ingredients(ingredients, instance)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
