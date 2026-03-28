@@ -164,7 +164,9 @@ class TagViewSet(ListModelMixin, UpdateModelMixin, DestroyModelMixin, GenericVie
         return self.queryset.filter(user=self.request.user).order_by("-name")
 
 
-class IngredientViewSet(ListModelMixin, GenericViewSet):
+class IngredientViewSet(
+    DestroyModelMixin, UpdateModelMixin, ListModelMixin, GenericViewSet
+):
     """
     ViewSet providing only the list action for the authenticated user's ingredients.
 
