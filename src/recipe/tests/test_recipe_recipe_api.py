@@ -1,11 +1,15 @@
 """Tests for the recipe API."""
 
 from decimal import Decimal
+from typing import cast
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AbstractUser
+from django.db.models import QuerySet
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.response import Response
 from rest_framework.test import APIClient
 
 from core.models import Recipe, Tag
@@ -87,7 +91,7 @@ class PublicRecipeApiTests(TestCase):
         responds with 401 before `get_queryset()` is ever reached — confirming
         the recipes endpoint is protected and cannot be accessed anonymously.
         """
-        res = self.client.get(RECIPE_URL)
+        res: Response = cast(Response, self.client.get(RECIPE_URL))
 
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -117,7 +121,7 @@ class PrivateRecipeApiTests(TestCase):
         authenticated session exists.
         """
         self.client = APIClient()
-        self.user = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+        self.user: AbstractUser = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
             email="user@example.com", password="testpass123"
         )
         self.client.force_authenticate(self.user)
@@ -140,9 +144,9 @@ class PrivateRecipeApiTests(TestCase):
         """
         create_recipe(user=self.user)
 
-        res = self.client.get(RECIPE_URL)
+        res: Response = cast(Response, self.client.get(RECIPE_URL))
 
-        recipes = Recipe.objects.all().order_by("-id")
+        recipes: QuerySet[Recipe] = Recipe.objects.all().order_by("-id")
         serializer = RecipeSerializer(recipes, many=True)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -162,15 +166,15 @@ class PrivateRecipeApiTests(TestCase):
         the serializer — if a field is added or removed from RecipeSerializer, the
         test still passes as long as the response mirrors the serializer output.
         """
-        other_user = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+        other_user: AbstractUser = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
             email="other@example.com", password="testpass123"
         )
         create_recipe(user=other_user)
         create_recipe(user=self.user)
 
-        res = self.client.get(RECIPE_URL)
+        res: Response = cast(Response, self.client.get(RECIPE_URL))
 
-        recipes = Recipe.objects.filter(user=self.user)
+        recipes: QuerySet[Recipe] = Recipe.objects.filter(user=self.user)
         serializer = RecipeSerializer(recipes, many=True)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -194,7 +198,7 @@ class PrivateRecipeApiTests(TestCase):
         recipe: Recipe = create_recipe(user=self.user)
 
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.get(url)
+        res: Response = cast(Response, self.client.get(url))
 
         serializer = RecipeDetailSerializer(recipe)
 
@@ -231,7 +235,7 @@ class PrivateRecipeApiTests(TestCase):
             "link": "https://example.com/chocolate-cheesecake.pdf",
         }
 
-        res = self.client.post(RECIPE_URL, payload)
+        res: Response = cast(Response, self.client.post(RECIPE_URL, payload))
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
@@ -257,13 +261,13 @@ class PrivateRecipeApiTests(TestCase):
         permission check.  The 404 (rather than 403) is intentional — leaking
         which pks exist would itself be an information disclosure.
         """
-        other_user = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+        other_user: AbstractUser = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
             email="other@example.com", password="testpass123"
         )
         recipe: Recipe = create_recipe(user=other_user)
 
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.get(url)
+        res: Response = cast(Response, self.client.get(url))
 
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
@@ -300,7 +304,7 @@ class PrivateRecipeApiTests(TestCase):
         }
 
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.put(url, payload)
+        res: Response = cast(Response, self.client.put(url, payload))
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
@@ -332,7 +336,9 @@ class PrivateRecipeApiTests(TestCase):
         )
 
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.patch(url, {"title": "Patched Title"})
+        res: Response = cast(
+            Response, self.client.patch(url, {"title": "Patched Title"})
+        )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
@@ -354,14 +360,16 @@ class PrivateRecipeApiTests(TestCase):
         request confirms that ownership was not silently transferred — the record
         is completely untouched in the database.
         """
-        other_user = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+        other_user: AbstractUser = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
             email="other@example.com", password="testpass123"
         )
         recipe: Recipe = create_recipe(user=other_user)
         original_title: str = recipe.title  # type: ignore[missing-attribute]
 
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.patch(url, {"title": "Hijacked Title"})
+        res: Response = cast(
+            Response, self.client.patch(url, {"title": "Hijacked Title"})
+        )
 
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
@@ -385,7 +393,7 @@ class PrivateRecipeApiTests(TestCase):
         recipe: Recipe = create_recipe(user=self.user)
 
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.delete(url)
+        res: Response = cast(Response, self.client.delete(url))
 
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(
@@ -405,13 +413,13 @@ class PrivateRecipeApiTests(TestCase):
         critical second check: it confirms the recipe was not deleted as a side
         effect of the 404 path.
         """
-        other_user = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+        other_user: AbstractUser = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
             email="other@example.com", password="testpass123"
         )
         recipe: Recipe = create_recipe(user=other_user)
 
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.delete(url)
+        res: Response = cast(Response, self.client.delete(url))
 
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(
@@ -449,10 +457,12 @@ class PrivateRecipeApiTests(TestCase):
             "price": Decimal("2.50"),
             "tags": [{"name": "Thai"}, {"name": "Dinner"}],
         }
-        res = self.client.post(RECIPE_URL, payload, format="json")
+        res: Response = cast(
+            Response, self.client.post(RECIPE_URL, payload, format="json")
+        )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        recipes = Recipe.objects.filter(user=self.user)
+        recipes: QuerySet[Recipe] = Recipe.objects.filter(user=self.user)
 
         self.assertEqual(recipes.count(), 1)
         recipe: Recipe = recipes[0]
@@ -494,10 +504,12 @@ class PrivateRecipeApiTests(TestCase):
             "price": Decimal("4.50"),
             "tags": [{"name": "Indian"}, {"name": "Breakfast"}],
         }
-        res = self.client.post(RECIPE_URL, payload, format="json")
+        res: Response = cast(
+            Response, self.client.post(RECIPE_URL, payload, format="json")
+        )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        recipes = Recipe.objects.filter(user=self.user)
+        recipes: QuerySet[Recipe] = Recipe.objects.filter(user=self.user)
 
         self.assertEqual(recipes.count(), 1)
         recipe: Recipe = recipes[0]
@@ -528,7 +540,7 @@ class PrivateRecipeApiTests(TestCase):
 
         payload: dict[str, list[dict[str, str]]] = {"tags": [{"name": "Lunch"}]}
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.patch(url, payload, format="json")
+        res: Response = cast(Response, self.client.patch(url, payload, format="json"))
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         new_tag: Tag = Tag.objects.get(user=self.user, name="Lunch")
@@ -562,7 +574,7 @@ class PrivateRecipeApiTests(TestCase):
         tag_lunch: Tag = Tag.objects.create(user=self.user, name="Lunch")
         payload: dict[str, list[dict[str, str]]] = {"tags": [{"name": "Lunch"}]}
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.patch(url, payload, format="json")
+        res: Response = cast(Response, self.client.patch(url, payload, format="json"))
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn(tag_lunch, recipe.tags.all())
@@ -592,7 +604,7 @@ class PrivateRecipeApiTests(TestCase):
 
         payload: dict[str, list] = {"tags": []}
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res = self.client.patch(url, payload, format="json")
+        res: Response = cast(Response, self.client.patch(url, payload, format="json"))
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(recipe.tags.count(), 0)
