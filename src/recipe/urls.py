@@ -18,7 +18,7 @@ from django.urls import include, path
 from django.urls.resolvers import URLResolver
 from rest_framework.routers import DefaultRouter
 
-from .views import RecipeViewSet, TagViewSet
+from .views import IngredientViewSet, RecipeViewSet, TagViewSet
 
 app_name = "recipe"
 
@@ -26,6 +26,7 @@ app_name = "recipe"
 router = DefaultRouter()
 router.register("recipes", RecipeViewSet, basename="recipe")
 router.register("tags", TagViewSet, basename="tag")
+router.register("ingredients", IngredientViewSet, basename="ingredient")
 
 urlpatterns: list[URLResolver] = [
     path("", include(router.urls)),

@@ -1,16 +1,22 @@
 """Views for the recipe API."""
 
-from typing import Sequence
+from typing import Any, Sequence
 
+from django.db.models import QuerySet
 from rest_framework.authentication import BaseAuthentication, TokenAuthentication
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.serializers import BaseSerializer
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
-from core.models import Recipe, Tag
+from core.models import Ingredient, Recipe, Tag
 
-from .serializers import RecipeDetailSerializer, RecipeSerializer, TagSerializer
+from .serializers import (
+    IngredientSerializer,
+    RecipeDetailSerializer,
+    RecipeSerializer,
+    TagSerializer,
+)
 
 
 class RecipeViewSet(ModelViewSet):
@@ -112,48 +118,85 @@ class RecipeViewSet(ModelViewSet):
         serializer.save(user=self.request.user)
 
 
-class TagViewSet(ListModelMixin, UpdateModelMixin, DestroyModelMixin, GenericViewSet):
+class BaseRecipeAttributeViewSet(
+    DestroyModelMixin, UpdateModelMixin, ListModelMixin, GenericViewSet
+):
     """
-    ViewSet providing list, update, and delete actions for the authenticated user's tags.
+    Shared ViewSet for authenticated, user-scoped recipe attributes.
 
-    Composed from ``ListModelMixin`` (``list``), ``UpdateModelMixin``
-    (``update`` and ``partial_update``), ``DestroyModelMixin`` (``destroy``), and
-    ``GenericViewSet`` (which wires mixin actions to DRF's dispatch machinery).
-    This intentionally omits ``create`` and ``retrieve`` — tags are managed
-    indirectly through recipes, so only listing, in-place renaming, and deletion
-    are exposed at this stage.  Adding a mixin later (e.g. ``CreateModelMixin``)
-    will extend the surface without touching existing behavior.
+    Tags and ingredients expose the same three operations: ``list``, ``update`` /
+    ``partial_update``, and ``destroy``.  They also share the same access rules:
+    token authentication, ``IsAuthenticated`` permission checks, and a queryset
+    constrained to the requesting user's rows ordered by descending name.
 
-    ``authentication_classes = [TokenAuthentication]`` and
-    ``permission_classes = [IsAuthenticated]`` enforce the same auth contract as
-    ``RecipeViewSet``: every request must carry a valid ``Authorization: Token <key>``
-    header or the view returns 401 Unauthorized before ``get_queryset()`` is reached.
-
-    ``get_queryset()`` scopes the queryset to the requesting user so that tag lists
-    and updates are always private — one user's tags are never visible to or
-    modifiable by another user's client.
+    Concrete subclasses provide the model-backed ``queryset`` and
+    ``serializer_class`` for their specific resource.
     """
 
-    serializer_class: type[TagSerializer] = TagSerializer  # type: ignore[bad-override]
-    queryset = Tag.objects.all()
     authentication_classes: Sequence[type[BaseAuthentication]] = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
+    queryset: QuerySet[Any]
 
     def get_queryset(self):  # type: ignore[bad-override]
         """
-        Return only the tags owned by the currently authenticated user.
+        Return only the current user's resources ordered by descending name.
 
-        Mirrors the user-scoping pattern from ``RecipeViewSet.get_queryset()``: the
-        class-level ``queryset`` is intentionally broad (all tags in the database),
-        and this override applies ``.filter(user=request.user)`` to ensure the list
-        action never exposes another user's tags.
+        Subclasses intentionally declare a broad class-level ``queryset`` covering
+        all rows for the underlying model.  Scoping is applied here so every list,
+        update, and delete action automatically uses the authenticated user's data
+        and cannot leak or mutate another user's records.
 
-        ``order_by("-name")`` sorts tags in reverse alphabetical order.  Using name
-        rather than id provides a semantically meaningful, stable sort for the tag
-        list endpoint where alphabetical grouping is more useful than insertion order.
+        ``order_by("-name")`` sorts resources in reverse alphabetical order,
+        providing a semantically meaningful, stable sort for list endpoints where
+        alphabetical grouping is more useful than insertion order.
 
         ``# type: ignore[bad-override]`` suppresses the same pyrefly false positive
         as in ``RecipeViewSet``: the parent's generic return type cannot be matched
         against the concrete return type when the method omits an explicit annotation.
         """
         return self.queryset.filter(user=self.request.user).order_by("-name")
+
+
+class TagViewSet(BaseRecipeAttributeViewSet):
+    """
+    ViewSet for managing the authenticated user's tags.
+
+    Extends ``BaseRecipeAttributeViewSet`` to inherit token authentication,
+    ``IsAuthenticated`` permission enforcement, and user-scoped queryset
+    filtering without repetition.  The three exposed actions — ``list``,
+    ``update`` / ``partial_update``, and ``destroy`` — cover the tag management
+    surface: ``create`` and ``retrieve`` are intentionally absent because tags
+    are created implicitly when a recipe references them by name via
+    ``RecipeSerializer._get_or_create_tags()``.
+
+    ``serializer_class = TagSerializer`` wires all actions to the minimal
+    ``id`` + ``name`` representation.  The ``# type: ignore[bad-override]``
+    silences the pyrefly false positive triggered by narrowing the parent's
+    ``type[BaseSerializer]`` annotation to the concrete ``type[TagSerializer]``.
+    """
+
+    serializer_class: type[TagSerializer] = TagSerializer  # type: ignore[bad-override]
+    queryset = Tag.objects.all()
+
+
+class IngredientViewSet(BaseRecipeAttributeViewSet):
+    """
+    ViewSet for managing the authenticated user's ingredients.
+
+    Extends ``BaseRecipeAttributeViewSet`` to inherit token authentication,
+    ``IsAuthenticated`` permission enforcement, and user-scoped queryset
+    filtering without repetition.  The three exposed actions — ``list``,
+    ``update`` / ``partial_update``, and ``destroy`` — cover the ingredient
+    management surface: ``create`` and ``retrieve`` are intentionally absent
+    because ingredients are created implicitly when a recipe references them
+    by name via ``RecipeSerializer._get_or_create_ingredients()``.
+
+    ``serializer_class = IngredientSerializer`` wires all actions to the
+    minimal ``id`` + ``name`` representation.  The ``# type: ignore[bad-override]``
+    silences the pyrefly false positive triggered by narrowing the parent's
+    ``type[BaseSerializer]`` annotation to the concrete
+    ``type[IngredientSerializer]``.
+    """
+
+    serializer_class: type[IngredientSerializer] = IngredientSerializer  # type: ignore[bad-override]
+    queryset = Ingredient.objects.all()
