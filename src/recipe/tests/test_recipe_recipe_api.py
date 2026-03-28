@@ -12,7 +12,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.test import APIClient
 
-from core.models import Recipe, Tag
+from core.models import Ingredient, Recipe, Tag
 
 from ..serializers import RecipeDetailSerializer, RecipeSerializer
 
@@ -615,3 +615,204 @@ class PrivateRecipeApiTests(TestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(recipe.tags.count(), 0)
+
+    def test_create_recipe_with_new_ingredients(self) -> None:
+        """
+        POST /api/v1/recipe with an ``ingredients`` list creates the recipe and all new ingredients.
+
+        Verifies the end-to-end nested-write path introduced by overriding
+        ``RecipeSerializer.create()``.  Four things are asserted:
+
+        1. **HTTP 201 Created** — the serializer accepted the nested payload and
+           ``perform_create()`` persisted the record without errors.
+
+        2. **Exactly one recipe was created** — guards against accidental
+           duplication at the view or serializer layer.
+
+        3. **All three ingredients were attached** — ``recipe.ingredients.count() == 3``
+           confirms the M2M relationship was populated, not just the recipe row itself.
+
+        4. **Each ingredient is scoped to the user** — the ``all()`` generator query
+           checks ``recipe.ingredients.filter(name=..., user=self.user)`` for every
+           payload entry, confirming that ``get_or_create`` received the correct owner
+           and did not create orphan or cross-user ingredient rows.
+
+        ``format="json"`` is required because the default ``multipart`` encoding
+        cannot represent nested lists; using JSON ensures the nested ``ingredients``
+        structure is serialized and parsed correctly by DRF.
+        """
+        payload = {
+            "title": "Pasta Carbonara",
+            "time_minutes": 20,
+            "price": Decimal("3.50"),
+            "ingredients": [{"name": "Pasta"}, {"name": "Eggs"}, {"name": "Bacon"}],
+        }
+        res: Response = cast(
+            Response, self.client.post(RECIPE_URL, payload, format=JSON_FORMAT)
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        recipes: QuerySet[Recipe] = Recipe.objects.filter(user=self.user)
+        self.assertEqual(recipes.count(), 1)
+
+        recipe: Recipe = recipes[0]
+        self.assertEqual(recipe.ingredients.count(), 3)
+        self.assertTrue(
+            all(
+                recipe.ingredients.filter(name=i["name"], user=self.user).exists()
+                for i in payload["ingredients"]
+            )
+        )
+
+    def test_create_recipe_with_existing_ingredients(self) -> None:
+        """
+        POST /api/v1/recipe with an ingredient name matching an existing row reuses that ingredient.
+
+        The idempotency guarantee of ``Ingredient.objects.get_or_create()`` means
+        that submitting an ingredient whose ``(user, name)`` pair already exists
+        must not create a second row — the existing Ingredient instance is reused
+        and added to the recipe's M2M relation instead.
+
+        The test pre-creates ``ingredient`` (``"Tomato"``) directly via the ORM,
+        then POSTs a payload that includes ``{"name": "Tomato"}`` alongside a new
+        ingredient ``{"name": "Onion"}``.  Assertions verify:
+
+        1. **HTTP 201 Created** — the payload is accepted despite a pre-existing ingredient.
+        2. **Exactly one recipe created** — no duplication side-effect.
+        3. **Two ingredients attached** — one reused, one newly created, confirming
+           the mixed existing-plus-new path works correctly.
+        4. **``ingredient`` is the same ORM instance** — ``assertIn(ingredient,
+           recipe.ingredients.all())`` compares by primary key, confirming
+           ``get_or_create`` returned the original object rather than a duplicate
+           with a new ``id``.
+        5. **Each ingredient name is queryable on the recipe** — the ``all()`` generator
+           confirms both ingredients are present and scoped to ``self.user``.
+        """
+        ingredient: Ingredient = Ingredient.objects.create(
+            user=self.user, name="Tomato"
+        )
+        payload = {
+            "title": "Tomato Soup",
+            "time_minutes": 15,
+            "price": Decimal("2.00"),
+            "ingredients": [{"name": "Tomato"}, {"name": "Onion"}],
+        }
+        res: Response = cast(
+            Response, self.client.post(RECIPE_URL, payload, format=JSON_FORMAT)
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        recipes: QuerySet[Recipe] = Recipe.objects.filter(user=self.user)
+        self.assertEqual(recipes.count(), 1)
+
+        recipe: Recipe = recipes[0]
+        self.assertEqual(recipe.ingredients.count(), 2)
+
+        self.assertIn(ingredient, recipe.ingredients.all())
+        self.assertTrue(
+            all(
+                recipe.ingredients.filter(name=i["name"], user=self.user).exists()
+                for i in payload["ingredients"]
+            )
+        )
+
+    def test_create_ingredient_on_update(self) -> None:
+        """
+        PATCH /api/v1/recipe/<id> with a new ingredient name creates and attaches that ingredient.
+
+        Verifies that ``update()`` calls ``_get_or_create_ingredients()``, which will
+        create an Ingredient row when the supplied name does not yet exist for the
+        user, then add it to the recipe's M2M set.
+
+        The recipe starts with no ingredients.  After the PATCH:
+
+        1. **HTTP 200 OK** — the payload is accepted.
+        2. **Ingredient "Garlic" exists in the database** — ``Ingredient.objects.get()``
+           would raise ``DoesNotExist`` if ``get_or_create`` had not been called.
+        3. **Ingredient is attached to the recipe** — ``assertIn`` checks the M2M set.
+        """
+        recipe: Recipe = create_recipe(user=self.user)
+
+        payload: dict[str, list[dict[str, str]]] = {"ingredients": [{"name": "Garlic"}]}
+        url: str = detail_url(recipe.id)
+        res: Response = cast(
+            Response, self.client.patch(url, payload, format=JSON_FORMAT)
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        added_ingredient_on_recipe_update: Ingredient = Ingredient.objects.get(
+            user=self.user, name="Garlic"
+        )
+        self.assertIn(added_ingredient_on_recipe_update, recipe.ingredients.all())
+
+    def test_update_recipe_assign_ingredient(self) -> None:
+        """
+        PATCH /api/v1/recipe/<id> with a different ingredient replaces the entire M2M set.
+
+        Confirms the "clear-then-add" semantics of ``update()``: when ``ingredients``
+        is present in the payload, the existing M2M relationship is wiped via
+        ``instance.ingredients.clear()`` before the new ingredient list is applied.
+        An ingredient that was previously attached must no longer appear on the recipe
+        after the update.
+
+        Setup: a recipe is created and ``ingredient_1`` (``"Chicken"``) is manually
+        attached.  The PATCH payload contains only ``{"name": "Rice"}``.
+
+        Assertions after the PATCH:
+
+        1. **HTTP 200 OK** — the payload is accepted.
+        2. **``ingredient_2`` ("Rice") is now attached** — the new ingredient was added.
+        3. **``ingredient_1`` ("Chicken") is no longer attached** — the old ingredient
+           was removed by ``clear()``, demonstrating that the update replaces rather
+           than appends.
+        """
+        recipe: Recipe = create_recipe(user=self.user)
+
+        ingredient_1: Ingredient = Ingredient.objects.create(
+            user=self.user, name="Chicken"
+        )
+        recipe.ingredients.add(ingredient_1)
+
+        ingredient_2: Ingredient = Ingredient.objects.create(
+            user=self.user, name="Rice"
+        )
+        payload: dict[str, list[dict[str, str]]] = {"ingredients": [{"name": "Rice"}]}
+        url: str = detail_url(recipe.id)
+        res: Response = cast(
+            Response, self.client.patch(url, payload, format=JSON_FORMAT)
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn(ingredient_2, recipe.ingredients.all())
+        self.assertNotIn(ingredient_1, recipe.ingredients.all())
+
+    def test_clear_recipe_ingredients(self) -> None:
+        """
+        PATCH /api/v1/recipe/<id> with an empty ingredients list removes all ingredients.
+
+        Exercises the explicit-empty-list branch of ``update()``: sending
+        ``{"ingredients": []}`` signals intent to clear all ingredients, which is
+        distinguished from omitting the ``ingredients`` key entirely (which leaves
+        the M2M set unchanged due to the ``None`` sentinel default in ``pop()``).
+
+        Setup: a recipe is created and ``ingredient`` (``"Salt"``) is manually attached
+        via the ORM.  The PATCH payload is ``{"ingredients": []}``.
+
+        Assertions after the PATCH:
+
+        1. **HTTP 200 OK** — an empty ingredients list is a valid payload.
+        2. **``recipe.ingredients.count() == 0``** — all ingredients were removed;
+           the M2M join table has no rows for this recipe.
+        """
+        recipe: Recipe = create_recipe(user=self.user)
+        ingredient: Ingredient = Ingredient.objects.create(user=self.user, name="Salt")
+        recipe.ingredients.add(ingredient)
+
+        payload: dict[str, list] = {"ingredients": []}
+        url: str = detail_url(recipe.id)
+        res: Response = cast(
+            Response, self.client.patch(url, payload, format=JSON_FORMAT)
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(recipe.ingredients.count(), 0)
