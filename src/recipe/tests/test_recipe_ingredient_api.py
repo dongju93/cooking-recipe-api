@@ -198,3 +198,28 @@ class PrivateIngredientsApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         ingredient.refresh_from_db()
         self.assertEqual(ingredient.name, payload["name"])
+
+    def test_delete_ingredient(self) -> None:
+        """
+        DELETE /api/v1/recipe/ingredients/<id> removes the ingredient and returns 204 No Content.
+
+        ``DestroyModelMixin.destroy()`` calls ``get_object()`` (which applies the
+        user-scoped queryset from ``get_queryset()``), then ``perform_destroy()``,
+        which calls ``instance.delete()``.  204 No Content is the standard success
+        code for a DELETE that produces no response body.
+
+        The ``assertFalse(ingredients.exists())`` assertion confirms the row was
+        actually removed from the database — not just that the HTTP layer reported
+        success.  Filtering by ``user=self.user`` also verifies the delete was
+        scoped to the correct owner and did not inadvertently wipe unrelated rows.
+        """
+        ingredient: Ingredient = Ingredient.objects.create(
+            user=self.user, name="Lettuce"
+        )
+
+        url: str = detail_url(ingredient.id)
+        res: Response = cast(Response, self.client.delete(url))
+
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        ingredients = Ingredient.objects.filter(user=self.user)
+        self.assertFalse(ingredients.exists())
