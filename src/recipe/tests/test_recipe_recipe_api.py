@@ -17,6 +17,7 @@ from core.models import Recipe, Tag
 from ..serializers import RecipeDetailSerializer, RecipeSerializer
 
 RECIPE_URL: str = reverse("recipe:recipe-list")
+JSON_FORMAT: str = "json"
 
 
 def detail_url(recipe_id: int) -> str:
@@ -458,7 +459,7 @@ class PrivateRecipeApiTests(TestCase):
             "tags": [{"name": "Thai"}, {"name": "Dinner"}],
         }
         res: Response = cast(
-            Response, self.client.post(RECIPE_URL, payload, format="json")
+            Response, self.client.post(RECIPE_URL, payload, format=JSON_FORMAT)
         )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
@@ -505,7 +506,7 @@ class PrivateRecipeApiTests(TestCase):
             "tags": [{"name": "Indian"}, {"name": "Breakfast"}],
         }
         res: Response = cast(
-            Response, self.client.post(RECIPE_URL, payload, format="json")
+            Response, self.client.post(RECIPE_URL, payload, format=JSON_FORMAT)
         )
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
@@ -540,7 +541,9 @@ class PrivateRecipeApiTests(TestCase):
 
         payload: dict[str, list[dict[str, str]]] = {"tags": [{"name": "Lunch"}]}
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res: Response = cast(Response, self.client.patch(url, payload, format="json"))
+        res: Response = cast(
+            Response, self.client.patch(url, payload, format=JSON_FORMAT)
+        )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         new_tag: Tag = Tag.objects.get(user=self.user, name="Lunch")
@@ -574,7 +577,9 @@ class PrivateRecipeApiTests(TestCase):
         tag_lunch: Tag = Tag.objects.create(user=self.user, name="Lunch")
         payload: dict[str, list[dict[str, str]]] = {"tags": [{"name": "Lunch"}]}
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res: Response = cast(Response, self.client.patch(url, payload, format="json"))
+        res: Response = cast(
+            Response, self.client.patch(url, payload, format=JSON_FORMAT)
+        )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn(tag_lunch, recipe.tags.all())
@@ -604,7 +609,9 @@ class PrivateRecipeApiTests(TestCase):
 
         payload: dict[str, list] = {"tags": []}
         url: str = detail_url(recipe.id)  # type: ignore[missing-attribute]
-        res: Response = cast(Response, self.client.patch(url, payload, format="json"))
+        res: Response = cast(
+            Response, self.client.patch(url, payload, format=JSON_FORMAT)
+        )
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(recipe.tags.count(), 0)
