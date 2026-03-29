@@ -292,6 +292,9 @@ class Tag(Model):
         related_name="tags",
     )
 
+    class Meta:
+        unique_together: list[list[str]] = [["user", "name"]]
+
     def __str__(self) -> str:
         """Return the tag name as its human-readable string representation.
 
@@ -335,6 +338,9 @@ class Ingredient(Model):
         on_delete=CASCADE,
         related_name="ingredients",
     )
+
+    class Meta:
+        unique_together: list[list[str]] = [["user", "name"]]
 
     def __str__(self) -> str:
         """Return the ingredient name as its human-readable string representation.
