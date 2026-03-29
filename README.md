@@ -4,7 +4,7 @@
 
 - Python 3.14
 - Django 6.0.3
-- Django Rest Framework 3.16.1
+- Django Rest Framework 3.17.1
 - Docker
 - GitHub Actions
 
