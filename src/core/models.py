@@ -1,6 +1,8 @@
 """Custom User model using email as the login identifier instead of username."""
 
+from pathlib import Path
 from typing import Any, ClassVar
+from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth.base_user import (
@@ -16,11 +18,38 @@ from django.db.models import (
     DecimalField,
     EmailField,
     ForeignKey,
+    ImageField,
     IntegerField,
     ManyToManyField,
     Model,
     TextField,
 )
+
+
+def recipe_image_file_path(_, original_filename: str) -> str:
+    """
+    Generate a unique upload path for a recipe image.
+
+    Django calls this callable when saving an ImageField, passing the model
+    instance and the original filename supplied by the client. The instance is
+    ignored here (hence `_`) because the path is based on a fresh UUID, not on
+    any model attribute.
+
+    Path("uploads/recipe/") / uuid_filename uses pathlib's `/` operator to join
+    path components in a platform-safe way, then str() converts the resulting
+    Path back to a plain string — the type Django's FileField storage backend
+    expects for the `name` argument to Storage.save().
+
+    Generating a UUID filename (rather than keeping the original) has two benefits:
+      1. Collision avoidance — two users uploading "photo.jpg" each get a distinct
+         storage key, so neither file overwrites the other.
+      2. Privacy — the original filename chosen by the client is never persisted,
+         preventing information leakage about the uploader's local file system.
+    """
+    file_extension: str = Path(original_filename).suffix
+    uuid_filename: str = f"{uuid4()}{file_extension}"
+
+    return str(Path("uploads/recipe/") / uuid_filename)
 
 
 class UserManagement(BaseUserManager["User"]):
@@ -248,6 +277,7 @@ class Recipe(Model):
         "Tag",
     )
     ingredients: ManyToManyField = ManyToManyField("Ingredient")
+    image = ImageField(null=True, blank=True, upload_to=recipe_image_file_path)
 
     def __str__(self) -> str:
         """Return the recipe title as its human-readable string representation.

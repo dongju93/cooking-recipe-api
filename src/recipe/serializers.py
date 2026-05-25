@@ -1,6 +1,6 @@
 """Serializers for the recipe API."""
 
-from typing import Any
+from typing import Any, ClassVar
 
 from rest_framework.serializers import ModelSerializer
 
@@ -250,3 +250,37 @@ class RecipeDetailSerializer(RecipeSerializer):
 
     class Meta(RecipeSerializer.Meta):
         fields: list[str] = RecipeSerializer.Meta.fields + ["description"]
+
+
+class RecipeImageSerializer(ModelSerializer):
+    """
+    Serializer for uploading an image to an existing Recipe.
+
+    Scoped to ``id`` and ``image`` only — intentionally narrower than
+    ``RecipeDetailSerializer`` — so the upload endpoint cannot accept or modify
+    any other recipe field.  This makes the contract explicit: the only mutable
+    field through this serializer is ``image``.
+
+    ``extra_kwargs = {"image": {"required": True}}`` overrides the field-level
+    ``required`` attribute at the serializer layer.  The underlying model field
+    has ``blank=True`` (optional at the DB level for recipes that have no image
+    yet), but for the upload action it makes no sense to POST without a file,
+    so the serializer enforces presence before ``is_valid()`` returns ``True``.
+
+    ``ClassVar`` annotations on the Meta attributes prevent pyrefly from
+    treating them as instance attributes rather than class-level configuration
+    keys, which is the correct semantics for DRF's inner Meta class.
+
+    The ``# type: ignore[bad-override]`` on the inner Meta class silences the
+    same pyrefly false positive as in the other serializers: re-declaring Meta
+    as a nested class attribute triggers a "bad-override" warning even though
+    this is the canonical DRF pattern and carries no runtime risk.
+    """
+
+    class Meta:  # type: ignore[bad-override]
+        model: type[Recipe] = Recipe
+        fields: ClassVar[list[str]] = ["id", "image"]
+        read_only_fields: ClassVar[list[str]] = ["id"]
+        extra_kwargs: ClassVar[dict[str, dict[str, bool]]] = {
+            "image": {"required": True}
+        }

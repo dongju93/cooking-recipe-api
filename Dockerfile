@@ -39,6 +39,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd -r django-user && \
     useradd -r -g django-user -d /home/django-user -m django-user
 
+# Create static folder for serve and handle media files
+RUN mkdir -p /mnt/django/web/media && \
+    mkdir -p /mnt/django/web/static && \
+    chown -R django-user:django-user /mnt/django && \
+    chmod -R 755 /mnt/django
+
 # Set working directory
 WORKDIR /cooking_recipe_api
 

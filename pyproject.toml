@@ -20,17 +20,18 @@ dependencies = [
     "django==6.0.5",
     "djangorestframework==3.17.1",
     "drf-spectacular==0.29.0",
+    "pillow==12.2.0",
     "psycopg[binary,pool]==3.3.4",
 ]
 
 [dependency-groups]
 dev = [
-    "django-stubs-ext==6.0.4",
+    "django-stubs-ext==6.0.5",
     "django-types==0.24.0",
     "djangorestframework-types==0.9.0",
-    "pyrefly==0.64.1",
+    "pyrefly==1.0.0",
     "python-dotenv==1.2.2",
-    "ruff==0.15.12",
+    "ruff==0.15.14",
 ]
 
 
@@ -55,3 +56,6 @@ ignore = [
     # Ignore line length for comments
     "E501",
 ]
+
+[tool.pyrefly]
+project-includes = ["**/*.py*", "**/*.ipynb"]

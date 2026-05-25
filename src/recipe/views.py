@@ -3,9 +3,13 @@
 from typing import Any, Sequence
 
 from django.db.models import QuerySet
+from rest_framework import status
 from rest_framework.authentication import BaseAuthentication, TokenAuthentication
+from rest_framework.decorators import action
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
@@ -14,6 +18,7 @@ from core.models import Ingredient, Recipe, Tag
 from .serializers import (
     IngredientSerializer,
     RecipeDetailSerializer,
+    RecipeImageSerializer,
     RecipeSerializer,
     TagSerializer,
 )
@@ -72,7 +77,11 @@ class RecipeViewSet(ModelViewSet):
 
     def get_serializer_class(
         self,
-    ) -> type[RecipeDetailSerializer] | type[RecipeSerializer]:
+    ) -> (
+        type[RecipeDetailSerializer]
+        | type[RecipeSerializer]
+        | type[RecipeImageSerializer]
+    ):
         """
         Return the serializer class appropriate for the current router action.
 
@@ -95,6 +104,8 @@ class RecipeViewSet(ModelViewSet):
         """
         if self.action == "list":
             return RecipeSerializer
+        elif self.action == "upload_image":
+            return RecipeImageSerializer
 
         return RecipeDetailSerializer
 
@@ -116,6 +127,51 @@ class RecipeViewSet(ModelViewSet):
         in the POST body.
         """
         serializer.save(user=self.request.user)
+
+    @action(methods=["POST"], detail=True, url_path="upload-image")
+    def upload_image(self, request: Request, pk: int) -> Response:
+        """
+        Accept and persist an image file upload for the given recipe.
+
+        The ``@action`` decorator registers this method as a non-standard DRF
+        route alongside the default ModelViewSet actions.  ``detail=True``
+        signals that the route operates on a single instance rather than the
+        collection — the router generates the URL
+        ``/recipes/{pk}/upload-image/`` (``url_path="upload-image"``).
+        ``methods=["POST"]`` restricts the route to POST only; other HTTP
+        verbs return 405 Method Not Allowed.
+
+        ``self.get_object()`` retrieves the ``Recipe`` identified by ``pk``,
+        applying the user-scoped queryset from ``get_queryset()`` as an implicit
+        ownership check — a caller cannot upload to another user's recipe even
+        if they know the pk.
+
+        ``self.get_serializer()`` resolves to ``RecipeImageSerializer`` because
+        ``get_serializer_class()`` returns it when
+        ``self.action == "upload_image"``.  Passing ``data=request.data``
+        populates the serializer with the multipart payload containing the
+        uploaded file.
+
+        On validation success the serializer saves the file and returns the
+        updated ``id`` + ``image`` representation with HTTP 200.  On failure
+        the validation errors are returned with HTTP 400 without touching the
+        existing image.
+
+        ``pk`` is declared in the signature because DRF's router injects URL
+        captures as keyword arguments; the actual record lookup is handled
+        internally by ``self.get_object()`` via ``self.kwargs["pk"]``.
+        """
+        recipe = self.get_object()
+        old_image_name: str | None = recipe.image.name if recipe.image else None
+        serializer: BaseSerializer = self.get_serializer(recipe, data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            if old_image_name:
+                recipe.image.storage.delete(old_image_name)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class BaseRecipeAttributeViewSet(
