@@ -67,6 +67,30 @@ docker compose up
 # Then visit: http://localhost:8080/api/v1/docs
 ```
 
+## Django Static and Media Files
+
+Django uses two types of non-Python files:
+
+- **Static files**: CSS, JavaScript, images, icons, and other assets included with the project or installed apps.
+- **Media files**: Files uploaded by users while the application is running.
+
+This project is a REST API, so it does not define custom static files directly. Static files are still used by installed apps such as Django Admin, DRF, and drf-spectacular.
+
+Current setting:
+
+```python
+STATIC_URL = 'static/'
+```
+
+`STATIC_URL` is the URL prefix Django uses for static assets. In local development, Django's development server can serve static files from installed apps automatically.
+
+For production-style serving, Django usually collects static files into one directory and a reverse proxy such as Nginx serves them from the filesystem:
+
+- `collectstatic` gathers static files from installed apps into `STATIC_ROOT`.
+- Media uploads require `MEDIA_URL` and `MEDIA_ROOT`.
+- A Docker deployment commonly stores static and media files in a persistent volume, for example under `/vol/web/static` and `/vol/web/media`.
+- This repository has not yet configured `STATIC_ROOT`, `MEDIA_URL`, `MEDIA_ROOT`, or a static/media Docker volume.
+
 ## DRF APIView vs ViewSet
 
 `APIView` and `ViewSet` are both DRF abstractions for building APIs, but they fit different use cases.
