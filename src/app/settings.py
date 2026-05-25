@@ -19,6 +19,11 @@ django_stubs_ext.monkeypatch()
 
 load_dotenv(".env.local")
 
+
+def parse_allowed_hosts(value: str) -> list[str]:
+    return [host.strip() for host in value.split(',') if host.strip()]
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -32,7 +37,7 @@ SECRET_KEY = environ['SECRET_KEY']
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = environ.get('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS = parse_allowed_hosts(environ.get('ALLOWED_HOSTS', ''))
 
 
 # Application definition
