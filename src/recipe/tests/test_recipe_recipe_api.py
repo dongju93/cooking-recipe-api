@@ -1,6 +1,7 @@
 """Tests for the recipe API."""
 
 from decimal import Decimal
+from tempfile import NamedTemporaryFile
 from typing import cast
 
 from django.contrib.auth import get_user_model
@@ -8,6 +9,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db.models import QuerySet
 from django.test import TestCase
 from django.urls import reverse
+from PIL import Image
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.test import APIClient
@@ -34,6 +36,23 @@ def detail_url(recipe_id: int) -> str:
     and it keeps individual test methods free of URL-construction boilerplate.
     """
     return reverse("recipe:recipe-detail", args=[recipe_id])
+
+
+def image_upload_url(recipe_id: int) -> str:
+    """
+    Build the URL for the recipe image-upload action endpoint.
+
+    DRF generates action URLs for ``@action``-decorated methods using the
+    pattern ``<basename>-<url_name>``. The ``upload_image`` action on
+    ``RecipeViewSet`` is registered as ``recipe-upload-image`` under the
+    ``recipe`` namespace, producing a URL such as
+    ``/api/v1/recipe/recipes/1/upload-image/``.
+
+    Centralising the ``reverse()`` call here means any future rename of the
+    action only requires a single change and keeps test methods free of
+    URL-construction boilerplate — the same rationale as ``detail_url``.
+    """
+    return reverse("recipe:recipe-upload-image", args=[recipe_id])
 
 
 def create_recipe(user, **params) -> Recipe:
@@ -816,3 +835,94 @@ class PrivateRecipeApiTests(TestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(recipe.ingredients.count(), 0)
+
+
+class ImageUploadTests(TestCase):
+    """
+    Tests for the image upload action on the recipe detail endpoint.
+
+    Uses ``TestCase`` because each test creates real database records (User and
+    Recipe). Unlike the other test classes in this module, tests here also
+    produce real files on disk via Django's ``ImageField`` — ``tearDown``
+    explicitly deletes those files after every test to prevent accumulation in
+    ``MEDIA_ROOT`` across test runs.
+
+    Authentication follows the same ``force_authenticate()`` pattern used by
+    ``PrivateRecipeApiTests``, keeping the focus on upload behaviour rather than
+    on the token mechanism.
+    """
+
+    def setUp(self):
+        """
+        Create a user, an authenticated client, and a recipe before each test.
+
+        A recipe is created via ``create_recipe()`` rather than via the API so
+        that setUp does not depend on the recipe-create endpoint being
+        functional — upload tests should be isolated from create-endpoint
+        failures. ``force_authenticate()`` bypasses ``TokenAuthentication`` so
+        the client is ready to reach the upload action immediately.
+        """
+        self.client = APIClient()
+        self.user: AbstractUser = get_user_model().objects.create_user(  # type: ignore[missing-attribute]
+            email="user@example.com", password="testpass123"
+        )
+        self.client.force_authenticate(self.user)
+        self.recipe = create_recipe(user=self.user)
+
+    def tearDown(self) -> None:
+        """
+        Delete the recipe's image file from disk after each test.
+
+        ``ImageField.delete()`` removes the physical file from ``MEDIA_ROOT``
+        without deleting the model instance. This cleanup is mandatory here
+        because ``TestCase``'s transaction rollback only removes database rows —
+        files written to disk during the test are outside the transaction and
+        would otherwise accumulate between runs.
+        """
+        self.recipe.image.delete()
+
+    def test_upload_image(self):
+        """
+        POST a valid JPEG to the upload-image action returns 200 with an image URL.
+
+        ``NamedTemporaryFile`` produces a real file on disk so ``APIClient`` can
+        encode it as ``multipart/form-data``. ``Image.new("RGB", (10, 10))``
+        creates a minimal but valid JPEG — large enough to pass Pillow's format
+        validation without adding I/O overhead. ``seek(0)`` rewinds the file
+        pointer after ``save()`` so the client reads from the beginning.
+
+        After the request completes, ``refresh_from_db()`` reloads the instance
+        to confirm the ``image`` field was persisted to the database, and
+        ``image.path`` is checked to confirm the file was written to
+        ``MEDIA_ROOT`` (not just stored as a URL string in the response).
+        """
+        url: str = image_upload_url(self.recipe.id)  # type: ignore[missing-attribute]
+
+        with NamedTemporaryFile(suffix=".jpeg") as image_file:
+            _image = Image.new("RGB", (10, 10))
+            _image.save(image_file, format="JPEG")
+            image_file.seek(0)
+            res: Response = cast(
+                Response,
+                self.client.post(url, {"image": image_file}, format="multipart"),
+            )
+
+        self.recipe.refresh_from_db()
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("image", res.data)  # type: ignore[missing-attribute]
+        self.assertTrue(self.recipe.image.path)
+
+    def test_upload_image_bad_request(self):
+        """
+        POST a non-image value to the upload-image action returns 400.
+
+        Passing the string ``"notanimage"`` as the ``image`` field exercises
+        the serializer's ``ImageField`` validation, which rejects values that
+        are not valid image data. No ``NamedTemporaryFile`` or Pillow setup is
+        needed — the rejection happens before any file I/O occurs, so no disk
+        cleanup is required beyond the standard ``tearDown``.
+        """
+        url: str = image_upload_url(self.recipe.id)
+        res: Response = cast(Response, self.client.post(url, {"image": "notanimage"}))
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
