@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import TYPE_CHECKING
+from unittest.mock import patch
+from uuid import UUID, uuid4
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from ..models import Ingredient, Recipe, Tag
+from ..models import Ingredient, Recipe, Tag, recipe_image_file_path
 
 if TYPE_CHECKING:
     from ..models import User
@@ -192,3 +194,28 @@ class ModelTests(TestCase):
         )
 
         self.assertEqual(str(ingredient), ingredient.name)
+
+    @patch("core.models.uuid4")
+    def test_recipe_file_name_uuid(self, mock_uuid: UUID) -> None:
+        """
+        recipe_image_file_path returns a deterministic path when uuid4 is mocked.
+
+        @patch replaces the `uuid4` name in the `core.models` namespace with a
+        Mock for the duration of this test. The mock is passed as `mock_uuid` by
+        the test runner. Setting mock_uuid.return_value pins the UUID that
+        recipe_image_file_path will use, making the expected path deterministic.
+
+        The assertion confirms two things:
+          1. The file lands under the correct prefix (uploads/recipe/).
+          2. The original extension (.png) is preserved while the basename is
+             replaced by the UUID — verifying the privacy/collision-avoidance
+             behaviour described in recipe_image_file_path's docstring.
+
+        None is passed for the instance argument because recipe_image_file_path
+        ignores it (the `_` parameter), so any value — including None — is valid.
+        """
+        uuid: UUID = uuid4()
+        mock_uuid.return_value = uuid
+        file_path = recipe_image_file_path(None, "example.png")
+
+        self.assertEqual(file_path, f"uploads/recipe/{uuid}.png")
