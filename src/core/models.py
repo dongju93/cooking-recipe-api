@@ -277,7 +277,7 @@ class Recipe(Model):
         "Tag",
     )
     ingredients: ManyToManyField = ManyToManyField("Ingredient")
-    image = ImageField(null=True, upload_to=recipe_image_file_path)
+    image = ImageField(null=True, blank=True, upload_to=recipe_image_file_path)
 
     def __str__(self) -> str:
         """Return the recipe title as its human-readable string representation.
