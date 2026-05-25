@@ -162,10 +162,13 @@ class RecipeViewSet(ModelViewSet):
         internally by ``self.get_object()`` via ``self.kwargs["pk"]``.
         """
         recipe = self.get_object()
+        old_image_name: str | None = recipe.image.name if recipe.image else None
         serializer: BaseSerializer = self.get_serializer(recipe, data=request.data)
 
         if serializer.is_valid():
             serializer.save()
+            if old_image_name:
+                recipe.image.storage.delete(old_image_name)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
