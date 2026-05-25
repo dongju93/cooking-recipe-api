@@ -1,23 +1,23 @@
 # Cooking Recipe API
 
-## Environment
+## 환경
 
 - Python 3.14
-- Django 6.0.3
-- Django Rest Framework 3.17.1
+- Django 6.0.5
+- Django REST Framework 3.17.1
 - Docker
 - GitHub Actions
 
-## Commands
+## 명령어
 
 ### Docker
 
 ```bash
-# create migration files from model changes
+# 모델 변경 사항으로부터 migration 파일 생성
 docker compose run --rm recipe_api sh -c "python manage.py makemigrations"
-# apply migrations to database
+# database에 migration 적용
 docker compose run --rm recipe_api sh -c "python manage.py migrate"
-# collect static
+# static 파일 수집
 docker compose run --rm recipe_api sh -c "python manage.py collectstatic"
 # ruff format
 docker compose run --rm recipe_api sh -c "ruff format ."
@@ -32,138 +32,151 @@ docker compose run --rm recipe_api sh -c "python manage.py test"
 ### Local
 
 ```bash
-# create migration files from model changes
+# 모델 변경 사항으로부터 migration 파일 생성
 uv run src/manage.py makemigrations
-# apply migrations to database
+# database에 migration 적용
 uv run src/manage.py migrate
-# run server
+# server 실행
 ./dev_server.sh
-# collect static
+# static 파일 수집
 uv run src/manage.py collectstatic
 # ruff format, lint, type check
 ./code_quality.sh
 # test
-uv run src/manage.py test
+uv run src/manage.py test src/
 ```
 
-## API Documentation
+## API 문서
 
-The API uses [drf-spectacular](https://drf-spectacular.readthedocs.io/) to generate OpenAPI schema and interactive documentation.
+이 API는 [drf-spectacular](https://drf-spectacular.readthedocs.io/)를 사용해 OpenAPI schema와 대화형 문서를 생성합니다.
 
-### Endpoints
+### 엔드포인트
 
-- **OpenAPI Schema**: `http://localhost:8080/api/v1/schema` — Raw OpenAPI 3.0 schema (JSON)
-- **Swagger UI**: `http://localhost:8080/api/v1/docs` — Interactive API documentation with try-it-out functionality
+- **OpenAPI Schema**: `http://localhost:8080/api/v1/schema` — 원본 OpenAPI 3.0 schema(JSON)
+- **Swagger UI**: `http://localhost:8080/api/v1/docs` — try-it-out 기능이 포함된 대화형 API 문서
 
-Access these endpoints after starting the server:
+서버를 시작한 뒤 다음 endpoint에 접근할 수 있습니다.
 
 ```bash
 # Local development
 ./dev_server.sh
-# Then visit: http://localhost:8080/api/v1/docs
+# 이후 방문: http://localhost:8080/api/v1/docs
 
-# With Docker Compose
+# Docker Compose 사용
 docker compose up
-# Then visit: http://localhost:8080/api/v1/docs
+# 이후 방문: http://localhost:8080/api/v1/docs
 ```
 
-## Django Static and Media Files
+## Django Static 및 Media 파일
 
-Django uses two types of non-Python files:
+Django는 두 종류의 non-Python 파일을 사용합니다.
 
-- **Static files**: CSS, JavaScript, images, icons, and other assets included with the project or installed apps.
-- **Media files**: Files uploaded by users while the application is running.
+- **Static files**: CSS, JavaScript, 이미지, 아이콘, 그리고 프로젝트 또는 installed app에 포함된 기타 asset입니다.
+- **Media files**: application 실행 중 사용자가 upload한 파일입니다.
 
-This project is a REST API, so it does not define custom static files directly. Static files are still used by installed apps such as Django Admin, DRF, and drf-spectacular.
+이 프로젝트는 REST API이므로 custom static file을 직접 정의하지 않습니다. 다만 Django Admin, DRF, drf-spectacular 같은 installed app에서는 여전히 static file을 사용합니다.
 
-Current setting:
+현재 설정:
 
 ```python
-STATIC_URL = 'static/'
+STATIC_URL = '/static/static/'
+MEDIA_URL = '/static/media/'
+STATIC_ROOT = 'django_static/static/'
+MEDIA_ROOT = 'django_static/media/'
 ```
 
-`STATIC_URL` is the URL prefix Django uses for static assets. In local development, Django's development server can serve static files from installed apps automatically.
+`STATIC_URL`은 Django가 static asset에 사용하는 URL prefix입니다. `MEDIA_URL`은 upload media file에 사용하는 URL prefix입니다. `STATIC_ROOT`와 `MEDIA_ROOT`는 각각 `collectstatic` 결과물과 user upload file이 저장되는 filesystem path입니다.
 
-For production-style serving, Django usually collects static files into one directory and a reverse proxy such as Nginx serves them from the filesystem:
+production에 가까운 serving 방식에서는 보통 Django가 static file을 하나의 directory로 collect하고, Nginx 같은 reverse proxy가 filesystem에서 해당 파일을 serve합니다.
 
-- `collectstatic` gathers static files from installed apps into `STATIC_ROOT`.
-- Media uploads require `MEDIA_URL` and `MEDIA_ROOT`.
-- A Docker deployment commonly stores static and media files in a persistent volume, for example under `/vol/web/static` and `/vol/web/media`.
-- This repository has not yet configured `STATIC_ROOT`, `MEDIA_URL`, `MEDIA_ROOT`, or a static/media Docker volume.
+- `collectstatic`은 installed app의 static file을 `STATIC_ROOT`로 모읍니다.
+- Media upload에는 `MEDIA_URL`과 `MEDIA_ROOT`가 필요합니다.
+- 현재 `settings.py`에서는 Docker용 `/mnt/django/web/...` 값이 주석 처리되어 있고, effective 값은 local용 `django_static/static/`, `django_static/media/`입니다.
 
 ## DRF APIView vs ViewSet
 
-`APIView` and `ViewSet` are both DRF abstractions for building APIs, but they fit different use cases.
+`APIView`와 `ViewSet`은 API를 만들기 위한 DRF abstraction이지만, 적합한 use case가 다릅니다.
 
 ### APIView
 
-- Maps HTTP methods directly (`get`, `post`, `put`, `patch`, `delete`)
-- Best for custom workflows like authentication endpoints (`create`, `token`, `me`) where behavior is not standard CRUD
-- Uses explicit URL wiring via `path(...)`
+- HTTP method를 직접 mapping합니다(`get`, `post`, `put`, `patch`, `delete`).
+- 표준 CRUD가 아닌 authentication endpoint(`create`, `token`, `me`) 같은 custom workflow에 적합합니다.
+- `path(...)`를 통한 명시적인 URL wiring을 사용합니다.
 
 ### ViewSet
 
-- Groups resource actions (`list`, `retrieve`, `create`, `update`, `partial_update`, `destroy`) in one class
-- Best for model-driven resources (for example: `recipes`, `tags`, `ingredients`)
-- Commonly paired with DRF routers to generate RESTful routes automatically
+- resource action(`list`, `retrieve`, `create`, `update`, `partial_update`, `destroy`)을 하나의 class로 묶습니다.
+- model-driven resource에 적합합니다. 예: `recipes`, `tags`, `ingredients`
+- 보통 DRF router와 함께 사용해 RESTful route를 자동 생성합니다.
 
-### Rule of Thumb in This Project
+### 이 프로젝트의 기준
 
-- Use `APIView` for auth/session-style endpoints and custom one-off actions.
-- Use `ModelViewSet` (or mixin-based ViewSet) for resource collections that need standard CRUD behavior.
+- auth/session 성격의 endpoint와 custom one-off action에는 `APIView`를 사용합니다.
+- 표준 CRUD behavior가 필요한 resource collection에는 `ModelViewSet` 또는 mixin 기반 ViewSet을 사용합니다.
 
 ## DRF Serializers
 
-Serializers translate between complex Python objects (model instances, querysets) and primitive types that can be rendered into JSON or parsed from an incoming request body. They also perform validation — checking field types, constraints, and cross-field rules before any database write occurs.
+Serializer는 복잡한 Python object(model instance, queryset)와 JSON으로 rendering하거나 incoming request body에서 parsing할 수 있는 primitive type 사이를 변환합니다. 또한 database write가 발생하기 전에 field type, constraint, cross-field rule을 확인하는 validation도 수행합니다.
 
 ### ModelSerializer vs plain Serializer
 
-| Class             | When to use                                                            |
-| ----------------- | ---------------------------------------------------------------------- |
-| `ModelSerializer` | Model-backed resources where fields mirror DB columns                  |
-| `Serializer`      | Non-model data — custom validation, authentication, computed responses |
+| 클래스            | 사용 시점                                                             |
+| ----------------- | --------------------------------------------------------------------- |
+| `ModelSerializer` | field가 DB column과 대응되는 model-backed resource                    |
+| `Serializer`      | non-model data — custom validation, authentication, computed response |
 
-In this project:
+이 프로젝트에서는 다음과 같이 사용합니다.
 
-- `RecipeSerializer`, `RecipeDetailSerializer`, `TagSerializer`, `UserSerializer` all extend `ModelSerializer` — they map directly to DB models and auto-derive field types from the model definition.
-- `AuthTokenSerializer` extends plain `Serializer` — it validates login credentials and has no corresponding model row.
+- `RecipeSerializer`, `RecipeDetailSerializer`, `TagSerializer`, `IngredientSerializer`, `UserSerializer`는 모두 `ModelSerializer`를 확장합니다. 이들은 DB model에 직접 mapping되며 model definition에서 field type을 자동으로 추론합니다.
+- `AuthTokenSerializer`는 plain `Serializer`를 확장합니다. login credential을 validate하며 대응되는 model row가 없습니다.
 
 ### Serializer Inheritance (list vs detail)
 
-A common pattern is to define a lightweight list serializer and extend it with a detail serializer that adds heavier fields:
+일반적인 pattern은 가벼운 list serializer를 정의하고, 더 무거운 field를 추가하는 detail serializer로 확장하는 것입니다.
 
 ```python
 class RecipeSerializer(ModelSerializer):
+    tags = TagSerializer(many=True, required=False)
+    ingredients = IngredientSerializer(many=True, required=False)
+
     class Meta:
         model = Recipe
-        fields = ["id", "title", "time_minutes", "price", "link"]
+        fields = [
+            "id",
+            "title",
+            "time_minutes",
+            "price",
+            "link",
+            "tags",
+            "ingredients",
+        ]
         read_only_fields = ["id"]
 
 class RecipeDetailSerializer(RecipeSerializer):
-    class Meta(RecipeSerializer.Meta):          # inherits model + read_only_fields
+    class Meta(RecipeSerializer.Meta):          # model + read_only_fields를 상속
         fields = RecipeSerializer.Meta.fields + ["description"]
 ```
 
-`RecipeDetailSerializer.Meta` subclasses `RecipeSerializer.Meta` so `model` and `read_only_fields` are inherited automatically — only `fields` is widened to include `description`. The ViewSet selects the right serializer based on the action:
+`RecipeDetailSerializer.Meta`는 `RecipeSerializer.Meta`를 subclass하므로 `model`과 `read_only_fields`를 자동으로 상속합니다. `fields`만 `description`을 포함하도록 확장합니다. ViewSet은 action에 따라 알맞은 serializer를 선택합니다.
 
 ```python
 def get_serializer_class(self):
     if self.action == "list":
-        return RecipeSerializer       # lightweight: no description
-    return RecipeDetailSerializer     # full: includes description
+        return RecipeSerializer       # lightweight: description 없음
+    return RecipeDetailSerializer     # full: description 포함
 ```
 
-This avoids sending multi-kilobyte description fields in every row of a paginated list response.
+이렇게 하면 paginated list response의 모든 row에 multi-kilobyte description field를 보내는 것을 피할 수 있습니다.
 
 ### Nested Serializers
 
-A nested serializer embeds a related object's full representation inside a parent serializer's output instead of returning only a foreign key integer. The `Recipe` model has a `ManyToManyField` to `Tag`. Without nesting, DRF outputs only a list of tag PKs:
+nested serializer는 parent serializer의 output에서 related object를 foreign key integer만 반환하는 대신 전체 representation으로 embedding합니다. `Recipe` model은 `Tag`와 `Ingredient`에 대한 `ManyToManyField`를 가집니다. nesting이 없으면 DRF는 tag PK list만 출력합니다.
 
 ```json
 { "id": 1, "title": "Pasta", "tags": [3, 7] }
 ```
 
-With a nested `TagSerializer`, the full tag objects appear inline:
+nested `TagSerializer`를 사용하면 전체 tag object가 inline으로 나타납니다.
 
 ```json
 {
@@ -176,58 +189,78 @@ With a nested `TagSerializer`, the full tag objects appear inline:
 }
 ```
 
-To add nested read-only tags to `RecipeDetailSerializer`:
+이 프로젝트의 `RecipeSerializer`는 `tags`와 `ingredients`를 nested field로 정의합니다.
 
 ```python
-class RecipeDetailSerializer(RecipeSerializer):
-    tags = TagSerializer(many=True, read_only=True)
-
-    class Meta(RecipeSerializer.Meta):
-        fields = RecipeSerializer.Meta.fields + ["description", "tags"]
+class RecipeSerializer(ModelSerializer):
+    tags = TagSerializer(many=True, required=False)
+    ingredients = IngredientSerializer(many=True, required=False)
 ```
 
-`many=True` tells DRF to iterate over the M2M queryset and serialize each item. `read_only=True` makes the embedded list output-only — write operations use a separate endpoint.
+`many=True`는 DRF가 M2M queryset을 순회하면서 각 item을 serialize하도록 합니다. `required=False`는 recipe 생성 또는 수정 시 해당 nested field를 생략할 수 있게 합니다.
 
 ### Writable Nested Serializers
 
-Making nested objects writable adds complexity: DRF cannot automatically infer how to create or update nested rows. You must override `create()` and `update()` on the parent serializer:
+nested object를 writable하게 만들면 복잡도가 올라갑니다. DRF의 기본 `ModelSerializer.create()`와 `ModelSerializer.update()`는 writable nested representation을 지원하지 않으므로, parent serializer에서 `create()`와 `update()`를 명시적으로 구현해야 합니다.
 
 ```python
 def create(self, validated_data):
-    tags_data = validated_data.pop("tags", [])
+    tags = validated_data.pop("tags", [])
+    ingredients = validated_data.pop("ingredients", [])
     recipe = super().create(validated_data)
-    for tag_data in tags_data:
-        tag, _ = Tag.objects.get_or_create(user=recipe.user, name=tag_data["name"])
+    auth_user = self.context["request"].user
+    for tag_data in tags:
+        tag, _ = Tag.objects.get_or_create(user=auth_user, name=tag_data["name"])
         recipe.tags.add(tag)
+    for ingredient_data in ingredients:
+        ingredient, _ = Ingredient.objects.get_or_create(
+            user=auth_user,
+            name=ingredient_data["name"],
+        )
+        recipe.ingredients.add(ingredient)
     return recipe
 
 def update(self, instance, validated_data):
-    tags_data = validated_data.pop("tags", None)
-    instance = super().update(instance, validated_data)
-    if tags_data is not None:
+    tags = validated_data.pop("tags", None)
+    ingredients = validated_data.pop("ingredients", None)
+    auth_user = self.context["request"].user
+
+    if tags is not None:
         instance.tags.clear()
-        for tag_data in tags_data:
-            tag, _ = Tag.objects.get_or_create(user=instance.user, name=tag_data["name"])
+        for tag_data in tags:
+            tag, _ = Tag.objects.get_or_create(user=auth_user, name=tag_data["name"])
             instance.tags.add(tag)
+    if ingredients is not None:
+        instance.ingredients.clear()
+        for ingredient_data in ingredients:
+            ingredient, _ = Ingredient.objects.get_or_create(
+                user=auth_user,
+                name=ingredient_data["name"],
+            )
+            instance.ingredients.add(ingredient)
+
+    for attr, value in validated_data.items():
+        setattr(instance, attr, value)
+    instance.save()
     return instance
 ```
 
-Two key details:
+중요한 detail은 두 가지입니다.
 
-- `pop("tags", [])` in `create()` vs `pop("tags", None)` in `update()` — using `None` as the sentinel in `update()` distinguishes "client omitted tags" (leave them alone) from "client sent `tags: []`" (clear all tags). Using `[]` as default would silently wipe tags on any PATCH that omits the field.
-- `get_or_create` instead of `create` — makes tag assignment idempotent. Two recipes can reference the same tag name without creating duplicates, and re-posting the same name is safe.
+- `create()`의 `pop("tags", [])` / `pop("ingredients", [])`와 `update()`의 `pop("tags", None)` / `pop("ingredients", None)` — `update()`에서 `None`을 sentinel로 사용하면 "client가 field를 생략함"(그대로 둠)과 "client가 빈 list를 보냄"(모두 제거)을 구분할 수 있습니다. `[]`를 default로 사용하면 해당 field를 생략한 PATCH에서도 M2M relation이 조용히 모두 지워질 수 있습니다.
+- `create` 대신 `get_or_create` 사용 — tag/ingredient assignment를 idempotent하게 만듭니다. 두 recipe가 같은 tag 또는 ingredient name을 참조할 수 있고, 같은 name을 다시 post해도 안전합니다.
 
-In this project, `Tag` objects can also be managed through their own dedicated `/api/v1/recipe/tags` endpoint. Using `read_only=True` on the nested field and relying solely on that endpoint is a valid alternative that keeps each serializer's responsibility narrower — the trade-off is that clients must make separate requests to assign tags when creating a recipe.
+이 프로젝트에서 `Tag`와 `Ingredient` object는 전용 `/api/v1/recipe/tags/`, `/api/v1/recipe/ingredients/` endpoint를 통해 list/update/delete할 수도 있습니다. create는 recipe create/update에서 nested payload를 통해 암묵적으로 처리합니다.
 
 ## Django Migrations
 
-- **makemigrations**: Detects model changes and creates new migration files in each app's `migrations/` directory.
-- **migrate**: Applies unapplied migration files to the database so the schema matches the current Django models.
-- Recommended order: run `makemigrations` first, then run `migrate`.
+- **makemigrations**: model 변경 사항을 감지하고 각 app의 `migrations/` directory에 새 migration file을 생성합니다.
+- **migrate**: 아직 적용되지 않은 migration file을 database에 적용해 schema가 현재 Django model과 일치하도록 합니다.
+- 권장 순서: 먼저 `makemigrations`를 실행한 뒤 `migrate`를 실행합니다.
 
 ## GitHub Actions
 
-### How it works
+### 동작 방식
 
 ```mermaid
 flowchart LR
@@ -249,9 +282,9 @@ flowchart LR
     end
 ```
 
-## Authentication
+## 인증
 
-Django REST Framework supports four authentication strategies. This project uses **Token Authentication**.
+Django REST Framework는 여러 authentication scheme을 지원합니다. 이 README에서는 대표적인 네 가지 방식을 비교하며, 이 프로젝트는 **Token Authentication**을 사용합니다.
 
 ### 1. Basic Authentication
 
@@ -259,151 +292,151 @@ Django REST Framework supports four authentication strategies. This project uses
 Authorization: Basic base64(email:password)
 ```
 
-Credentials are sent with every request. The server decodes and validates them against the database each time.
+credential은 매 request마다 전송됩니다. server는 매번 이를 decode하고 database와 대조해 validate합니다.
 
-- **Pros**: Simple, stateless, no server-side storage needed
-- **Cons**: Credentials travel on every request (requires HTTPS); no way to log out without changing the password
-- **DRF class**: `BasicAuthentication`
+- **장점**: 단순하고 stateless하며 server-side storage가 필요 없습니다.
+- **단점**: credential이 매 request마다 전송됩니다(HTTPS 필요). password를 변경하지 않고는 logout할 방법이 없습니다.
+- **DRF 클래스**: `BasicAuthentication`
 
-### 2. Token Authentication ← this project uses
+### 2. Token Authentication ← 이 프로젝트에서 사용
 
 ```
-# Login — exchange credentials for a token
+# Login — credential을 token으로 교환
 POST /api/v1/user/token  { "email": "...", "password": "..." }
 ← { "token": "abc123..." }
 
-# Subsequent requests — send token in header
+# 이후 request — header에 token 전송
 Authorization: Token abc123...
 ```
 
-On login the server generates a random opaque token and stores it in the `authtoken_token` table. The client stores it and sends it in the `Authorization` header on every subsequent request.
+login 시 server는 random opaque token을 생성하고 `authtoken_token` table에 저장합니다. client는 이 token을 저장한 뒤 이후 모든 request의 `Authorization` header에 보냅니다.
 
-- **Pros**: Credentials sent only once; tokens are revokable by deleting the DB row; built into DRF with no extra dependencies
-- **Cons**: Tokens never expire by default; requires a DB lookup on every authenticated request
-- **DRF class**: `TokenAuthentication`
+- **장점**: credential은 한 번만 전송됩니다. DB row를 삭제해 token을 revoke할 수 있습니다. 추가 dependency 없이 DRF에 내장되어 있습니다.
+- **단점**: 기본적으로 token이 만료되지 않습니다. authenticated request마다 DB lookup이 필요합니다.
+- **DRF 클래스**: `TokenAuthentication`
 
 ### 3. JWT (JSON Web Token)
 
 ```
-# Login — receive short-lived access token + long-lived refresh token
+# Login — 짧게 유지되는 access token + 오래 유지되는 refresh token 수신
 POST /api/token  { "email": "...", "password": "..." }
 ← { "access": "eyJ...", "refresh": "eyJ..." }
 
-# Subsequent requests
+# 이후 request
 Authorization: Bearer eyJ...
 
-# When access token expires, use refresh token to get a new one
+# access token이 만료되면 refresh token으로 새 access token 발급
 POST /api/token/refresh  { "refresh": "eyJ..." }
 ← { "access": "eyJ..." }
 ```
 
-The server signs a JSON payload with a secret key. No DB lookup is needed per request — the server only verifies the signature. The access token is short-lived (minutes); the refresh token is long-lived.
+server는 secret key로 JSON payload에 sign합니다. request마다 DB lookup은 필요 없으며, server는 signature만 verify합니다. access token은 짧게 유지되고(분 단위), refresh token은 오래 유지됩니다.
 
-- **Pros**: Stateless — no DB lookup per request, scales horizontally; built-in expiry
-- **Cons**: Cannot revoke tokens before expiry without a blocklist (which reintroduces DB lookups); payload is base64-encoded, not encrypted
+- **장점**: stateless합니다. request마다 DB lookup이 없어 horizontal scale에 유리합니다. expiry가 내장되어 있습니다.
+- **단점**: blocklist 없이는 expiry 전에 token을 revoke할 수 없습니다(blocklist를 쓰면 DB lookup이 다시 필요해집니다). payload는 base64로 encoding될 뿐 encryption되지는 않습니다.
 - **DRF library**: `djangorestframework-simplejwt`
 
 ### 4. Session Authentication
 
 ```
-# Login — server creates a session record and sends a session ID cookie
+# Login — server가 session record를 만들고 session ID cookie를 전송
 POST /api/login  { "username": "...", "password": "..." }
 ← Set-Cookie: sessionid=xyz
 
-# Browser sends cookie automatically on subsequent requests
+# browser는 이후 request에서 cookie를 자동 전송
 Cookie: sessionid=xyz
 ```
 
-Django's built-in session framework stores session data server-side (DB or cache) and identifies the user via a cookie. Used by Django Admin.
+Django의 built-in session framework는 session data를 server-side(DB 또는 cache)에 저장하고 cookie로 user를 식별합니다. Django Admin에서 사용됩니다.
 
-- **Pros**: Easy with Django's built-in system; cookies are sent automatically by browsers
-- **Cons**: Stateful — sessions stored server-side; cookie-based (CSRF protection required); not suitable for mobile apps or third-party API clients
-- **DRF class**: `SessionAuthentication`
+- **장점**: Django built-in system으로 쉽게 사용할 수 있습니다. browser가 cookie를 자동으로 보냅니다.
+- **단점**: stateful합니다. session이 server-side에 저장됩니다. cookie 기반이므로 CSRF protection이 필요합니다. mobile app이나 third-party API client에는 적합하지 않습니다.
+- **DRF 클래스**: `SessionAuthentication`
 
-### Comparison
+### 비교
 
-| Strategy | Stateless | Revokable | Expiry | Extra dependency |
-| -------- | --------- | --------- | ------ | ---------------- |
-| Basic    | Yes       | No        | No     | None             |
-| Token    | No        | Yes       | No     | None (built-in)  |
-| JWT      | Yes       | Partial   | Yes    | simplejwt        |
-| Session  | No        | Yes       | Yes    | None             |
+| 방식    | Stateless | Revokable | Expiry | 추가 dependency |
+| ------- | --------- | --------- | ------ | --------------- |
+| Basic   | Yes       | No        | No     | None            |
+| Token   | No        | Yes       | No     | None (built-in) |
+| JWT     | Yes       | Partial   | Yes    | simplejwt       |
+| Session | No        | Yes       | Yes    | None            |
 
-## TDD Theory
+## TDD 이론
 
-Test-Driven Development (TDD) is a software development methodology where tests are written before the actual implementation code. TDD follows a cyclical process known as the **Red-Green-Refactor** cycle.
+Test-Driven Development(TDD)는 실제 implementation code를 작성하기 전에 test를 먼저 작성하는 software development methodology입니다. TDD는 **Red-Green-Refactor** cycle이라고 알려진 순환 process를 따릅니다.
 
-### The Red-Green-Refactor Cycle
+### Red-Green-Refactor Cycle
 
-1. **Red Phase**: Write a failing test
-   - Create a test that defines the desired behavior of a feature
-   - The test fails because the feature hasn't been implemented yet
-   - This ensures the test is actually testing something meaningful
+1. **Red Phase**: 실패하는 test 작성
+   - feature의 desired behavior를 정의하는 test를 만듭니다.
+   - feature가 아직 구현되지 않았으므로 test는 실패합니다.
+   - 이를 통해 test가 실제로 의미 있는 것을 검증하고 있음을 보장합니다.
 
-2. **Green Phase**: Write minimal code to pass the test
-   - Implement the simplest code that makes the failing test pass
-   - Focus on functionality, not optimization
-   - The goal is to make the test pass, not to write perfect code
+2. **Green Phase**: test를 통과시키는 최소 code 작성
+   - 실패하는 test를 통과시키는 가장 단순한 code를 구현합니다.
+   - optimization이 아니라 functionality에 집중합니다.
+   - 목표는 완벽한 code를 쓰는 것이 아니라 test를 통과시키는 것입니다.
 
-3. **Refactor Phase**: Improve code quality
-   - Refactor the implementation to improve readability, maintainability, and performance
-   - Keep all tests passing during refactoring
-   - Remove duplication and adhere to design principles
+3. **Refactor Phase**: code quality 개선
+   - readability, maintainability, performance를 개선하도록 implementation을 refactor합니다.
+   - refactoring 중에도 모든 test가 계속 통과하도록 유지합니다.
+   - duplication을 제거하고 design principle을 따릅니다.
 
-### Benefits of TDD
+### TDD의 장점
 
-- **Improved Code Quality**: Tests catch bugs early and ensure code behaves as expected
-- **Better Design**: Writing tests first encourages simpler, more modular designs
-- **Confidence in Refactoring**: Comprehensive tests allow safe refactoring of existing code
-- **Living Documentation**: Tests serve as executable specifications of how the code should work
-- **Reduced Debugging Time**: Issues are caught during development, not during deployment
-- **Faster Development Cycle**: Although TDD requires upfront effort, it reduces time spent debugging
+- **Improved Code Quality**: test가 bug를 조기에 잡고 code가 예상대로 동작하도록 보장합니다.
+- **Better Design**: test를 먼저 작성하면 더 단순하고 modular한 design을 유도합니다.
+- **Confidence in Refactoring**: comprehensive test는 기존 code를 안전하게 refactor할 수 있게 합니다.
+- **Living Documentation**: test는 code가 어떻게 동작해야 하는지에 대한 executable specification 역할을 합니다.
+- **Reduced Debugging Time**: issue가 deployment 중이 아니라 development 중에 잡힙니다.
+- **Faster Development Cycle**: TDD는 upfront effort가 필요하지만 debugging에 쓰는 시간을 줄입니다.
 
 ### Best Practices
 
-- Write one test at a time before implementing the corresponding feature
-- Keep tests focused and isolated (one assertion per test concept)
-- Use descriptive test names that explain the expected behavior
-- Maintain a high test coverage ratio
-- Run tests frequently during development
-- Keep tests simple and maintainable
+- 대응되는 feature를 구현하기 전에 test를 한 번에 하나씩 작성합니다.
+- test를 focused하고 isolated하게 유지합니다(하나의 test concept마다 하나의 assertion).
+- expected behavior를 설명하는 descriptive test name을 사용합니다.
+- 높은 test coverage ratio를 유지합니다.
+- development 중 test를 자주 실행합니다.
+- test를 단순하고 maintainable하게 유지합니다.
 
-## Test
+## 테스트
 
-Django's test framework requires that you create a 'tests' folder inside your Django app directory. This folder must include an '**init**.py' file for Django to recognize it as a module. Additionally, test file names must have the 'test\_' prefix. When you run tests using Django's test command, it automatically executes all tests and clears the test data by creating and then destroying a temporary database for testing.
+이 프로젝트는 각 Django app directory 안에 `tests` folder를 두고 test file name에 `test_` prefix를 붙이는 구조를 사용합니다. `tests` folder에는 Django가 module로 인식할 수 있도록 `__init__.py` file이 포함되어야 합니다. Django test command를 실행하면 발견된 test를 실행하고, testing을 위한 temporary database를 생성한 뒤 삭제하여 test data를 정리합니다.
 
-- Test classes
+- 테스트 클래스
   1. SimpleTestCase
-     - No database integration
-     - Useful if no database is required for your test
-     - Save time executing tests
+     - Database integration 없음
+     - test에 database가 필요하지 않을 때 유용합니다.
+     - test 실행 시간을 줄입니다.
   2. TestCase
-     - Database integration
-     - Useful for testing code that uses the database
+     - Database integration 있음
+     - database를 사용하는 code를 test할 때 유용합니다.
 
 ### Mocking
 
-Mocking is a technique used in unit testing to isolate the code under test by replacing external dependencies with mock objects. This allows you to:
+Mocking은 unit testing에서 external dependency를 mock object로 대체해 test 대상 code를 isolate하는 technique입니다. 이를 통해 다음을 할 수 있습니다.
 
-- **Test in isolation**: Focus on testing a specific component without external dependencies
-- **Control external behavior**: Simulate different scenarios (success, failure, edge cases)
-- **Speed up tests**: Avoid slow I/O operations like database calls or API requests
-- **Verify interactions**: Ensure your code calls dependencies with correct parameters
+- **Test in isolation**: external dependency 없이 특정 component test에 집중합니다.
+- **Control external behavior**: 다양한 scenario(success, failure, edge case)를 simulate합니다.
+- **Speed up tests**: database call이나 API request 같은 느린 I/O operation을 피합니다.
+- **Verify interactions**: code가 dependency를 올바른 parameter로 호출하는지 확인합니다.
 
 #### Core Concepts
 
-**unittest.mock** is Python's built-in library for creating mock objects:
+**unittest.mock**은 mock object를 만들기 위한 Python built-in library입니다.
 
-1. **Mock**: A flexible object that records how it's used
-   - Tracks all method calls and attribute access
-   - Returns mock objects for any attribute access
-   - Perfect for verifying interactions
+1. **Mock**: 사용 방식을 기록하는 flexible object
+   - 모든 method call과 attribute access를 추적합니다.
+   - 어떤 attribute access에 대해서도 mock object를 반환합니다.
+   - interaction 검증에 적합합니다.
 
-2. **MagicMock**: Extends Mock with magic methods support
-   - Supports operators, context managers, iteration, etc.
-   - Use when mocking objects that need special method support
+2. **MagicMock**: magic method support를 포함하도록 Mock을 확장
+   - operator, context manager, iteration 등을 지원합니다.
+   - special method support가 필요한 object를 mocking할 때 사용합니다.
 
-3. **patch**: A decorator/context manager to replace objects during testing
-   - Replaces the target with a MagicMock by default
-   - Automatically restores the original after test completes
-   - Can be applied to functions, classes, or module-level objects
+3. **patch**: testing 중 object를 대체하는 decorator/context manager
+   - 기본적으로 target을 MagicMock으로 대체합니다.
+   - test가 끝난 뒤 원래 object를 자동으로 복원합니다.
+   - function, class, module-level object에 적용할 수 있습니다.
