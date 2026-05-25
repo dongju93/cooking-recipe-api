@@ -34,6 +34,7 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=${DEBUG:-False}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
+      - DOCKER=true
     depends_on:
       - recipe_postgres
 
