@@ -155,3 +155,7 @@ REST_FRAMEWORK = {
 
 # Remove trailing slash from URL patterns
 APPEND_SLASH = False
+
+SPECTACULAR_SETTINGS = {
+    "COMPONENT_SPLIT_REQUEST": True,
+}
