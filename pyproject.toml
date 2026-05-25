@@ -26,7 +26,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "django-stubs-ext==6.0.4",
+    "django-stubs-ext==6.0.5",
     "django-types==0.24.0",
     "djangorestframework-types==0.9.0",
     "pyrefly==1.0.0",
