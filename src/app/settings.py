@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from typing import Any
 from dotenv import load_dotenv
 from os import environ
 import django_stubs_ext
@@ -91,7 +92,7 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
+DATABASES: dict[str, Any] = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': environ['POSTGRES_DB'],
@@ -171,7 +172,7 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
 }
 
-# HTTPS / HSTS — only active in production (DEBUG=False)
+# HTTPS / HSTS / DB SSL — only active in production (DEBUG=False)
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
@@ -179,3 +180,4 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+    DATABASES["default"]["OPTIONS"] = {"sslmode": "require"}
