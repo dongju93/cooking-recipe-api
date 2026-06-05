@@ -42,6 +42,7 @@ class CreateUserView(CreateAPIView):
     """
 
     serializer_class: type[BaseSerializer] | None = UserSerializer
+    authentication_classes: Sequence[type[BaseAuthentication]] = []
     permission_classes = [AllowAny]
 
 
@@ -66,6 +67,7 @@ class CreateTokenView(ObtainAuthToken):
     """
 
     serializer_class: type[AuthTokenSerializer] = AuthTokenSerializer  # type: ignore[bad-override]
+    authentication_classes: Sequence[type[BaseAuthentication]] = []
     renderer_classes: Sequence[type[BaseRenderer]] = (
         api_settings.DEFAULT_RENDERER_CLASSES  # type: ignore[bad-assignment]
     )
