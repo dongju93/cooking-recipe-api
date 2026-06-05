@@ -6,7 +6,7 @@ from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from rest_framework.authentication import BaseAuthentication, TokenAuthentication
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.generics import CreateAPIView, RetrieveUpdateAPIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.renderers import BaseRenderer
 from rest_framework.serializers import BaseSerializer
 from rest_framework.settings import api_settings
@@ -42,6 +42,7 @@ class CreateUserView(CreateAPIView):
     """
 
     serializer_class: type[BaseSerializer] | None = UserSerializer
+    permission_classes = [AllowAny]
 
 
 class CreateTokenView(ObtainAuthToken):
@@ -68,6 +69,7 @@ class CreateTokenView(ObtainAuthToken):
     renderer_classes: Sequence[type[BaseRenderer]] = (
         api_settings.DEFAULT_RENDERER_CLASSES  # type: ignore[bad-assignment]
     )
+    permission_classes = [AllowAny]
 
 
 class ManageUserView(RetrieveUpdateAPIView):

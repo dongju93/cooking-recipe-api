@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from typing import Any
 from dotenv import load_dotenv
 from os import environ
 import django_stubs_ext
@@ -18,6 +19,11 @@ import django_stubs_ext
 django_stubs_ext.monkeypatch()
 
 load_dotenv(".env.local")
+
+
+def parse_allowed_hosts(value: str) -> list[str]:
+    return [host.strip() for host in value.split(',') if host.strip()]
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -32,7 +38,7 @@ SECRET_KEY = environ['SECRET_KEY']
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = environ.get('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS = parse_allowed_hosts(environ.get('ALLOWED_HOSTS', ''))
 
 
 # Application definition
@@ -86,7 +92,7 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
+DATABASES: dict[str, Any] = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': environ['POSTGRES_DB'],
@@ -150,7 +156,13 @@ AUTH_USER_MODEL = "core.User"
 
 # DRF Swagger
 REST_FRAMEWORK = {
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
 }
 
 # Remove trailing slash from URL patterns
@@ -159,3 +171,13 @@ APPEND_SLASH = False
 SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
 }
+
+# HTTPS / HSTS / DB SSL — only active in production (DEBUG=False)
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    DATABASES["default"]["OPTIONS"] = {"sslmode": "require"}
